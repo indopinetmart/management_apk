@@ -9,13 +9,10 @@ use Illuminate\Support\Facades\Auth;
 use Laravolt\Avatar\Facade as Avatar;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
-
-
 use App\Models\UserProfile;
 
 class ProfileController extends Controller
 {
-
     /**
      * Menampilkan halaman profil user yang sedang login
      *

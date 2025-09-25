@@ -30,9 +30,9 @@ class MenuController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'=>'required|string',
-            'route'=>'nullable|string',
-            'parent_id'=>'nullable|exists:menus,id'
+            'name' => 'required|string',
+            'route' => 'nullable|string',
+            'parent_id' => 'nullable|exists:menus,id'
         ]);
 
         $menu = Menu::create($request->all());

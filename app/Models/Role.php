@@ -10,12 +10,12 @@ class Role extends Model
 
     public function menus()
     {
-        return $this->belongsToMany(Menu::class,'role_menus');
+        return $this->belongsToMany(Menu::class, 'role_menus');
     }
 
     public function permissions()
     {
-        return $this->belongsToMany(Permission::class,'role_permissions');
+        return $this->belongsToMany(Permission::class, 'role_permissions');
     }
 
     public function users()
@@ -23,4 +23,3 @@ class Role extends Model
          return $this->hasMany(User::class, 'role_id', 'id');
     }
 }
-

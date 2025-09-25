@@ -16,8 +16,6 @@ use Carbon\Carbon;
 
 class UserController extends Controller
 {
-
-
     // Halaman utama daftar pengguna
     public function index()
     {
@@ -322,6 +320,4 @@ class UserController extends Controller
         // Kembalikan respons sukses
         return response()->json(['success' => 'Akun Berhasil Di Aktifkan!']);
     }
-
-
 }

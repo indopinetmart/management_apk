@@ -72,8 +72,8 @@ class AuthorizeController extends Controller
             [
                 'user_id'       => $user->id,
                 'device_id'     => $deviceRecord->device_id,
-                'device_type'   =>$attemptRecord->device,
-                'browser'       =>$attemptRecord->browser,
+                'device_type'   => $attemptRecord->device,
+                'browser'       => $attemptRecord->browser,
                 'platform'      => $deviceRecord->platform,
                 'resolution'    => $deviceRecord->resolution,
                 'ip_address'    => $attemptRecord?->ip_address,

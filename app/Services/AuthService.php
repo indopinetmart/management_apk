@@ -285,7 +285,6 @@ class AuthService
         $authHeader = $request->header('Authorization');
 
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-
             if (Auth::check()) {
                 $user = Auth::user();
                 if (!$user) {

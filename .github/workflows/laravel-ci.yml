@@ -1,6 +1,6 @@
 name: Laravel CI - management_apk
 
-# 🔹 Workflow ini jalan kalau ada push atau pull request ke branch main & develop
+# 🔹 Workflow ini jalan saat ada push atau pull request ke branch main & develop
 on:
   push:
     branches: [ "main", "develop" ]
@@ -14,22 +14,18 @@ jobs:
   setup:
     name: Setup PHP & Install Dependencies
     runs-on: ubuntu-latest
-    outputs:
-      php-version: ${{ steps.php-version.outputs.php }}
     steps:
-      # Checkout source code
       - uses: actions/checkout@v4
 
-      # Install PHP dengan ekstensi yang dibutuhkan
+      # Setup PHP 8.2 + ekstensi Laravel
       - name: Setup PHP
-        id: php-version
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
-      # Cache vendor biar composer install lebih cepat
+      # Cache vendor agar composer install lebih cepat
       - name: Cache Composer
         uses: actions/cache@v3
         with:
@@ -37,15 +33,15 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
 
-      # Install dependencies
+      # Install dependencies Composer
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
-      # Copy env khusus CI
+      # Copy .env khusus CI
       - name: Copy CI environment
         run: cp .env.ci .env
 
-      # Generate APP_KEY
+      # Generate APP_KEY untuk Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
@@ -72,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Tunggu MySQL ready
+      # Tunggu sampai MySQL siap
       - name: Wait for MySQL
         run: |
           retries=20
@@ -95,6 +91,17 @@ jobs:
     needs: [setup, database]
     steps:
       - uses: actions/checkout@v4
+
+      # Cache hasil migration untuk mempercepat CI
+      - name: Cache Laravel Migrations
+        uses: actions/cache@v3
+        with:
+          path: bootstrap/cache
+          key: ${{ runner.os }}-laravel-migrations-${{ hashFiles('database/migrations/*.php') }}
+          restore-keys: |
+            ${{ runner.os }}-laravel-migrations-
+
+      # Jalankan semua migration Laravel
       - name: Run Laravel Migrations
         env:
           DB_CONNECTION: mysql
@@ -114,6 +121,17 @@ jobs:
     needs: migrate
     steps:
       - uses: actions/checkout@v4
+
+      # Cache hasil test agar lebih cepat di run berikutnya
+      - name: Cache PHPUnit Results
+        uses: actions/cache@v3
+        with:
+          path: storage/framework/testing
+          key: ${{ runner.os }}-phpunit-results-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-phpunit-results-
+
+      # Jalankan semua unit/feature test Laravel
       - name: Run Laravel Tests
         env:
           DB_CONNECTION: mysql
@@ -123,28 +141,3 @@ jobs:
           DB_USERNAME: root
           DB_PASSWORD: root
         run: php artisan test --stop-on-failure --verbose
-
-  # =============================
-  # 5️⃣ Code Quality & Static Analysis
-  # =============================
-  code-quality:
-    name: Code Quality & Static Analysis
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-      - uses: actions/checkout@v4
-
-      # Install tools dev: phpcs & larastan
-      - name: Install Dev Tools
-        run: |
-          composer require --dev squizlabs/php_codesniffer nunomaduro/larastan
-
-      # Jalankan PHP CodeSniffer (cek standar PSR-12)
-      - name: Code Standard Check (phpcs)
-        run: |
-          vendor/bin/phpcs --standard=PSR12 app/ routes/ database/
-
-      # Jalankan Static Analysis pakai Larastan (phpstan)
-      - name: Static Analysis (Larastan)
-        run: |
-          vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=1G

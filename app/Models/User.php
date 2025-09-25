@@ -35,7 +35,9 @@ use Illuminate\Support\Facades\Auth;
  */
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory;
+    use Notifiable;
+    use HasApiTokens;
 
     /**
      * Kolom yang bisa diisi mass-assignment.

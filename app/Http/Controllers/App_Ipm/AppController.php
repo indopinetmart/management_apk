@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use App\Services\FaceRecognitionService;
 use Illuminate\Http\JsonResponse;
 use App\Services\DataWilayahService;
+
 // use App\Services\RajaOngkirService;
 
 
@@ -45,7 +46,7 @@ class AppController extends Controller
         // Modal lengkapi profil
         $showCompleteProfileModal = $profile->accepted_terms == 1 &&
             (!$profile->nik_karyawan || !$profile->nama_lengkap || !$profile->no_tlp || !$profile->nik_ktp ||
-                !$profile->alamat_rumah || !$profile->province_name || !$profile->city_name || !$profile->norek ||!$profile->bank || !$profile->kontak_darurat ||
+                !$profile->alamat_rumah || !$profile->province_name || !$profile->city_name || !$profile->norek || !$profile->bank || !$profile->kontak_darurat ||
                 !$profile->district_name || !$profile->village_name || !$profile->kodepos);
 
         // ==============================
@@ -306,17 +307,30 @@ class AppController extends Controller
 
             // Cek field yang wajib
             $missingFields = [];
-            if (empty($profile->foto_ktp)) $missingFields[] = 'Foto KTP';
-            if (empty($profile->lokasi_rumah)) $missingFields[] = 'Lokasi Rumah';
-            if (empty($profile->foto)) $missingFields[] = 'Foto Selfie';
-            if (empty($profile->verifikasi_muka)) $missingFields[] = 'Verifikasi Wajah';
+            if (empty($profile->foto_ktp)) {
+                $missingFields[] = 'Foto KTP';
+            }
+            if (empty($profile->lokasi_rumah)) {
+                $missingFields[] = 'Lokasi Rumah';
+            }
+            if (empty($profile->foto)) {
+                $missingFields[] = 'Foto Selfie';
+            }
+            if (empty($profile->verifikasi_muka)) {
+                $missingFields[] = 'Verifikasi Wajah';
+            }
 
             // Tentukan step berikutnya
             $nextStep = null;
-            if (empty($profile->foto_ktp)) $nextStep = 'ktp';
-            elseif (empty($profile->lokasi_rumah)) $nextStep = 'lokasi';
-            elseif (empty($profile->foto)) $nextStep = 'selfie';
-            elseif (empty($profile->verifikasi_muka)) $nextStep = 'verifikasi_muka';
+            if (empty($profile->foto_ktp)) {
+                $nextStep = 'ktp';
+            } elseif (empty($profile->lokasi_rumah)) {
+                $nextStep = 'lokasi';
+            } elseif (empty($profile->foto)) {
+                $nextStep = 'selfie';
+            } elseif (empty($profile->verifikasi_muka)) {
+                $nextStep = 'verifikasi_muka';
+            }
 
             return response()->json([
                 'type' => 'success',

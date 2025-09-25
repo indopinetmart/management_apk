@@ -100,8 +100,12 @@ class EmailVerificationHelper
         try {
             $decoded = JWT::decode($token, new Key($publicKey, 'RS256'));
 
-            if ($decoded->iss !== config('app.url')) throw new \Exception("Invalid issuer");
-            if ($decoded->aud !== 'pinetmart_app') throw new \Exception("Invalid audience");
+            if ($decoded->iss !== config('app.url')) {
+                throw new \Exception("Invalid issuer");
+            }
+            if ($decoded->aud !== 'pinetmart_app') {
+                throw new \Exception("Invalid audience");
+            }
 
             return $decoded;
         } catch (\Firebase\JWT\ExpiredException $e) {

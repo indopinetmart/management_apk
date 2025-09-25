@@ -9,7 +9,8 @@ use App\Models\User;
 
 class VerifyEmailMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public $user;
     public $verificationUrl;

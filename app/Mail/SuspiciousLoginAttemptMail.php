@@ -8,7 +8,8 @@ use Illuminate\Queue\SerializesModels;
 
 class SuspiciousLoginAttemptMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public $user;
     public $frontendIp;
@@ -27,7 +28,6 @@ class SuspiciousLoginAttemptMail extends Mailable
         $this->userAgent = $userAgent;
         $this->resetUrl = $resetUrl;
         $this->platform = $platform;
-
     }
 
     /**

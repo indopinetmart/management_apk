@@ -27,5 +27,4 @@ class Menu extends Model
     {
         return $this->hasMany(RoleMenu::class, 'menu_id'); // sesuaikan dengan nama tabel dan kolom foreign key
     }
-
 }
