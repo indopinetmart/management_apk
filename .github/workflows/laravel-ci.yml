@@ -1,6 +1,5 @@
 name: Laravel CI - management_apk
 
-# 🔹 Workflow ini jalan saat ada push atau pull request ke branch main & develop
 on:
   push:
     branches: [ "main", "develop" ]
@@ -17,7 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Setup PHP 8.2 + ekstensi Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -25,7 +23,6 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
-      # Cache vendor agar composer install lebih cepat
       - name: Cache Composer
         uses: actions/cache@v3
         with:
@@ -33,23 +30,20 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
 
-      # Install dependencies Composer
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
-      # Copy .env khusus CI
       - name: Copy CI environment
         run: cp .env.ci .env
 
-      # Generate APP_KEY untuk Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
   # =============================
-  # 2️⃣ Setup Database MySQL
+  # 2️⃣ Setup Database + Run Migration
   # =============================
-  database:
-    name: MySQL Service
+  migrate:
+    name: Setup MySQL & Run Migrations
     runs-on: ubuntu-latest
     needs: setup
     services:
@@ -65,34 +59,10 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
 
-      # Tunggu sampai MySQL siap
-      - name: Wait for MySQL
-        run: |
-          retries=20
-          until mysqladmin ping -h127.0.0.1 -uroot -proot --silent || [ $retries -le 0 ]; do
-            echo "Waiting for MySQL..."
-            sleep 5
-            retries=$((retries-1))
-          done
-          if [ $retries -le 0 ]; then
-            echo "MySQL failed to start"
-            exit 1
-          fi
-
-  # =============================
-  # 3️⃣ Jalankan Migration (dengan composer install)
-  # =============================
-  migrate:
-    name: Run Migrations
-    runs-on: ubuntu-latest
-    needs: [setup, database]
-    steps:
-      - uses: actions/checkout@v4
-
-      # Install PHP + dependency dulu (biar ada vendor/)
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -103,11 +73,9 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
-      # Copy .env CI
       - name: Copy CI environment
         run: cp .env.ci .env
 
-      # Jalankan semua migration Laravel
       - name: Run Laravel Migrations
         env:
           DB_CONNECTION: mysql
@@ -119,16 +87,29 @@ jobs:
         run: php artisan migrate --force
 
   # =============================
-  # 4️⃣ Jalankan Test
+  # 3️⃣ Jalankan Test
   # =============================
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: migrate
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: management
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
 
-      # Setup PHP + install dependency (lagi-lagi fresh runner)
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -142,7 +123,6 @@ jobs:
       - name: Copy CI environment
         run: cp .env.ci .env
 
-      # Jalankan semua unit/feature test Laravel
       - name: Run Laravel Tests
         env:
           DB_CONNECTION: mysql
