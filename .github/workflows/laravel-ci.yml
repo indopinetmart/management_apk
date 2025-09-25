@@ -1,59 +1,69 @@
-name: Laravel CI
+name: Laravel CI - management_apk
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 jobs:
-  build:
+  setup:
+    name: Setup PHP & Install Dependencies
     runs-on: ubuntu-latest
+    outputs:
+      php-version: ${{ steps.php-version.outputs.php }}
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Setup PHP
+        id: php-version
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql, intl
+          coverage: xdebug
+
+      - name: Cache Composer
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      - name: Copy CI environment
+        run: cp .env.ci .env
+
+      - name: Generate App Key
+        run: php artisan key:generate --ansi
+
+  database:
+    name: MySQL Service
+    runs-on: ubuntu-latest
+    needs: setup
     services:
       mysql:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: management
+        ports:
+          - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h mysql -uroot -proot"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
     steps:
-      # 1️⃣ Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Setup PHP
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: mbstring, bcmath, pdo_mysql
-          coverage: none
-
-      # 3️⃣ Install Composer dependencies
-      - name: Install Composer dependencies
-        run: composer install --no-progress --prefer-dist --no-interaction --optimize-autoloader
-
-      # 4️⃣ Copy CI env
-      - name: Copy CI env
-        run: cp .env.ci .env
-
-      # 5️⃣ Generate app key
-      - name: Generate app key
-        run: php artisan key:generate --ansi
-
-      # 6️⃣ Wait for MySQL (letakkan di sini)
       - name: Wait for MySQL
         run: |
-          echo "Waiting for MySQL (mysql:3306) to be ready..."
           retries=20
-          until mysqladmin ping -hmysql -uroot -proot --silent || [ $retries -le 0 ]; do
-            echo "MySQL not ready yet - sleeping 5s..."
+          until mysqladmin ping -h127.0.0.1 -uroot -proot --silent || [ $retries -le 0 ]; do
+            echo "Waiting for MySQL..."
             sleep 5
             retries=$((retries-1))
           done
@@ -61,29 +71,52 @@ jobs:
             echo "MySQL failed to start"
             exit 1
           fi
-          echo "MySQL is ready."
 
-      # 7️⃣ Storage link
-      - name: Storage link
-        run: php artisan storage:link || true
-
-      # 8️⃣ Run migrations
-      - name: Run migrations
+  migrate:
+    name: Run Migrations
+    runs-on: ubuntu-latest
+    needs: [setup, database]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Laravel Migrations
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: management
+          DB_USERNAME: root
+          DB_PASSWORD: root
         run: php artisan migrate --force
-      # 9️⃣ Run tests
-      - name: Run tests
-        run: php artisan test --testsuite=Feature || php artisan test
 
-      # 🔟 Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: migrate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Laravel Tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: management
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan test --stop-on-failure --verbose
 
-      # 1️⃣1️⃣ Install Node dependencies
-      - name: Install Node dependencies
-        run: npm ci
+  code-quality:
+    name: Code Quality & Static Analysis
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
 
-      # 1️⃣2️⃣ Build frontend
-      - name: Build frontend
-        run: npm run build
+      - name: PHP CS Fixer
+        run: |
+          composer global require friendsofphp/php-cs-fixer
+          ~/.composer/vendor/bin/php-cs-fixer fix --dry-run --diff
+
+      - name: PHPStan Analysis
+        run: |
+          composer global require phpstan/phpstan
+          ~/.composer/vendor/bin/phpstan analyse app --level max
