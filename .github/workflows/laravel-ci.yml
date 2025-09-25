@@ -83,7 +83,7 @@ jobs:
           fi
 
   # =============================
-  # 3️⃣ Jalankan Migration
+  # 3️⃣ Jalankan Migration (dengan composer install)
   # =============================
   migrate:
     name: Run Migrations
@@ -92,14 +92,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache hasil migration untuk mempercepat CI
-      - name: Cache Laravel Migrations
-        uses: actions/cache@v3
+      # Install PHP + dependency dulu (biar ada vendor/)
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          path: bootstrap/cache
-          key: ${{ runner.os }}-laravel-migrations-${{ hashFiles('database/migrations/*.php') }}
-          restore-keys: |
-            ${{ runner.os }}-laravel-migrations-
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql, intl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      # Copy .env CI
+      - name: Copy CI environment
+        run: cp .env.ci .env
 
       # Jalankan semua migration Laravel
       - name: Run Laravel Migrations
@@ -122,14 +128,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache hasil test agar lebih cepat di run berikutnya
-      - name: Cache PHPUnit Results
-        uses: actions/cache@v3
+      # Setup PHP + install dependency (lagi-lagi fresh runner)
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          path: storage/framework/testing
-          key: ${{ runner.os }}-phpunit-results-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-phpunit-results-
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql, intl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      - name: Copy CI environment
+        run: cp .env.ci .env
 
       # Jalankan semua unit/feature test Laravel
       - name: Run Laravel Tests
