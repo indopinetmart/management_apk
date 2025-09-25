@@ -1,0 +1,33 @@
+# ===================================
+# Larastan / PHPStan Configuration
+# ===================================
+
+includes:
+    - vendor/nunomaduro/larastan/extension.neon
+
+parameters:
+    # Path yang dianalisa
+    paths:
+        - app
+        - routes
+        - database
+
+    # Level analisis: 0 (ringan) - 9 (ketat banget)
+    level: 5
+
+    # Biar nggak kehabisan memory di CI
+    memoryLimit: 1G
+
+    # Optimisasi untuk Laravel
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+
+    # Abaikan beberapa error umum Laravel
+    ignoreErrors:
+        - '#Access to an undefined property#'
+        - '#Call to an undefined method Illuminate\\Support\\.*#'
+
+    # Bootstrapping biar phpstan ngerti Laravel
+    bootstrapFiles:
+        - ./vendor/autoload.php
+        - ./bootstrap/app.php

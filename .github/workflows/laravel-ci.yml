@@ -1,5 +1,6 @@
 name: Laravel CI - management_apk
 
+# 🔹 Workflow ini jalan kalau ada push atau pull request ke branch main & develop
 on:
   push:
     branches: [ "main", "develop" ]
@@ -7,22 +8,28 @@ on:
     branches: [ "main", "develop" ]
 
 jobs:
+  # =============================
+  # 1️⃣ Setup PHP & Install Dependencies
+  # =============================
   setup:
     name: Setup PHP & Install Dependencies
     runs-on: ubuntu-latest
     outputs:
       php-version: ${{ steps.php-version.outputs.php }}
     steps:
+      # Checkout source code
       - uses: actions/checkout@v4
 
+      # Install PHP dengan ekstensi yang dibutuhkan
       - name: Setup PHP
         id: php-version
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
-          coverage: xdebug
+          coverage: none
 
+      # Cache vendor biar composer install lebih cepat
       - name: Cache Composer
         uses: actions/cache@v3
         with:
@@ -30,15 +37,21 @@ jobs:
           key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
           restore-keys: ${{ runner.os }}-composer-
 
+      # Install dependencies
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
+      # Copy env khusus CI
       - name: Copy CI environment
         run: cp .env.ci .env
 
+      # Generate APP_KEY
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+  # =============================
+  # 2️⃣ Setup Database MySQL
+  # =============================
   database:
     name: MySQL Service
     runs-on: ubuntu-latest
@@ -59,6 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Tunggu MySQL ready
       - name: Wait for MySQL
         run: |
           retries=20
@@ -72,6 +86,9 @@ jobs:
             exit 1
           fi
 
+  # =============================
+  # 3️⃣ Jalankan Migration
+  # =============================
   migrate:
     name: Run Migrations
     runs-on: ubuntu-latest
@@ -88,6 +105,9 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
+  # =============================
+  # 4️⃣ Jalankan Test
+  # =============================
   tests:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -104,6 +124,9 @@ jobs:
           DB_PASSWORD: root
         run: php artisan test --stop-on-failure --verbose
 
+  # =============================
+  # 5️⃣ Code Quality & Static Analysis
+  # =============================
   code-quality:
     name: Code Quality & Static Analysis
     runs-on: ubuntu-latest
@@ -111,12 +134,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: PHP CS Fixer
+      # Install tools dev: phpcs & larastan
+      - name: Install Dev Tools
         run: |
-          composer global require friendsofphp/php-cs-fixer
-          ~/.composer/vendor/bin/php-cs-fixer fix --dry-run --diff
+          composer require --dev squizlabs/php_codesniffer nunomaduro/larastan
 
-      - name: PHPStan Analysis
+      # Jalankan PHP CodeSniffer (cek standar PSR-12)
+      - name: Code Standard Check (phpcs)
         run: |
-          composer global require phpstan/phpstan
-          ~/.composer/vendor/bin/phpstan analyse app --level max
+          vendor/bin/phpcs --standard=PSR12 app/ routes/ database/
+
+      # Jalankan Static Analysis pakai Larastan (phpstan)
+      - name: Static Analysis (Larastan)
+        run: |
+          vendor/bin/phpstan analyse -c phpstan.neon.dist --memory-limit=1G
