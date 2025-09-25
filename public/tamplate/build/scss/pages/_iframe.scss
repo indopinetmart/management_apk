@@ -1,0 +1,221 @@
+// ============================================
+// 🟢 IFRAME MODE (FULL RESPONSIVE)
+// ============================================
+
+body.iframe-mode {
+  // =====================
+  // Sidebar
+  // =====================
+  .main-sidebar {
+    display: none; // sembunyikan sidebar
+  }
+
+  // =====================
+  // Navbar (sticky top)
+  // =====================
+  .main-header {
+    display: block;
+    position: fixed; // tetap di atas
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030; // pastikan di atas konten
+    width: 100%;
+  }
+
+  // =====================
+  // Footer (sticky bottom)
+  // =====================
+  .main-footer {
+    display: block;
+    position: fixed; // tetap di bawah
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030; // di atas konten
+    width: 100%;
+  }
+
+  // =====================
+  // Konten utama
+  // =====================
+  .content-wrapper {
+    margin-left: 0 !important; // tidak ada sidebar
+    margin-top: 56px !important; // tinggi navbar default AdminLTE
+    margin-bottom: 40px !important; // tinggi footer (sesuaikan)
+    padding: 0 !important;
+    height: calc(100vh - 56px - 40px); // tinggi total viewport dikurangi navbar/footer
+    overflow-y: auto; // hanya konten yang bisa discroll
+    -webkit-overflow-scrolling: touch; // smooth scroll di iOS
+
+    // =====================
+    // Khusus iframe-mode
+    // =====================
+    &.iframe-mode {
+
+      // Tombol close tab
+      .btn-iframe-close {
+        color: $danger;
+        position: absolute;
+        line-height: 1;
+        right: .125rem;
+        top: .125rem;
+        z-index: 10;
+        visibility: hidden;
+
+        &:hover,
+        &:focus {
+          animation-name: fadeIn;
+          animation-duration: $transition-speed;
+          animation-fill-mode: both;
+          visibility: visible;
+        }
+
+        @include on-touch-device() {
+          visibility: visible;
+        }
+      }
+
+      // Navbar di tab iframe
+      .navbar-nav {
+        overflow-y: auto; // scroll jika banyak tab
+        width: 100%;
+
+        .nav-link {
+          white-space: nowrap;
+        }
+
+        .nav-item {
+          position: relative;
+
+          &:hover,
+          &:focus {
+            .btn-iframe-close {
+              animation-name: fadeIn;
+              animation-duration: $transition-speed;
+              animation-fill-mode: both;
+              visibility: visible;
+
+              @include on-touch-device() {
+                visibility: visible;
+              }
+            }
+          }
+        }
+      }
+
+      // Konten tab
+      .tab-content {
+        position: relative;
+        height: 100%;
+      }
+
+      // Kosongkan tab jika tidak ada
+      .tab-pane + .tab-empty {
+        display: none;
+      }
+
+      // Pesan "No tab selected"
+      .tab-empty {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      // Loading tab
+      .tab-loading {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: none;
+        background-color: $main-bg;
+
+        > div {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 100%;
+          height: 100%;
+        }
+      }
+
+      // Iframe utama
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+        margin-bottom: -8px;
+
+        .content-wrapper {
+          padding-bottom: 0 !important;
+        }
+      }
+
+      // Fullscreen mode
+      body.iframe-mode-fullscreen & {
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        margin-left: 0 !important;
+        height: 100%;
+        min-height: 100%;
+        z-index: $zindex-main-sidebar + 10;
+      }
+    }
+  }
+}
+
+// ============================================
+// Fullscreen body
+// ============================================
+body.iframe-mode-fullscreen {
+  overflow: hidden;
+
+  &.layout-navbar-fixed .wrapper .content-wrapper {
+    margin-top: 0 !important;
+    height: 100% !important;
+  }
+}
+
+// ============================================
+// Tombol close permanen
+// ============================================
+.permanent-btn-iframe-close {
+  .btn-iframe-close {
+    animation: none !important;
+    visibility: visible !important;
+    opacity: 1;
+  }
+}
+
+// ============================================
+// Dark Mode Support
+// ============================================
+@include dark-mode() {
+  .content-wrapper.iframe-mode {
+    .tab-loading {
+      background-color: $dark;
+    }
+  }
+}
+
+// ============================================
+// 🔹 Responsive Support
+// ============================================
+// Di resolusi kecil, navbar/footer tetap sticky, konten scrollable
+@media (max-width: 768px) {
+  body.iframe-mode {
+    .main-header,
+    .main-footer {
+      position: fixed;
+    }
+    .content-wrapper {
+      height: calc(100vh - 56px - 40px);
+    }
+  }
+}

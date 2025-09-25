@@ -1,0 +1,281 @@
+/* ====================================================
+   ⚙️ ROOT VARIABLES: Warna, Font, Efek Global
+   ==================================================== */
+:root {
+  /* Warna utama dan tambahan */
+  --color-primary: #4B0082;           /* Ungu Indigo - latar utama */
+  --color-secondary: #6A0DAD;         /* Ungu tambahan untuk gradasi */
+  --color-gradient-light: #fff8dc;    /* Cornsilk - gradasi terang */
+  --color-gradient-gold: #ffd700;     /* Gold - aksen gradasi */
+  --light-bg: rgba(255, 255, 255, 0.08); /* Background transparan blur */
+
+  /* Teks & Border */
+  --accent-color: #ffd700;            /* Warna fokus input */
+  --shadow-color: rgba(0, 0, 0, 0.4);  /* Warna bayangan elemen */
+  --border-radius: 8px;               /* Radius umum untuk elemen */
+  --transition-speed: 0.3s;           /* Kecepatan transisi UI */
+
+  /* Tipografi */
+  --font-family-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+  /* Efek bayangan & blur */
+  --shadow-blur: 6px;                 /* Intensitas blur bayangan */
+  --shadow-opacity: 0.3;              /* Transparansi bayangan */
+
+  /* ✅ Penambahan variabel shadow khusus untuk splash */
+  --color-shadow: rgba(0, 0, 0, 0.4); /* Warna bayangan splash */
+}
+
+/* ====================================================
+   🔤 RESET & BASE STYLE: Normalisasi dasar halaman
+   ==================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  min-height: 100vh;
+  font-family: var(--font-family-main);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* ====================================================
+   🧱 CONTAINER: Form Login
+   ==================================================== */
+.login-box {
+  background: var(--light-bg);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 0 20px var(--shadow-color);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+
+  /* Tambahkan ini untuk memberi jarak antar elemen anak */
+  display: flex;
+  flex-direction: column;
+  gap: 10; /* Sekitar 20px, bisa disesuaikan */
+}
+
+
+/* ====================================================
+   ✨ TITLE EFFECT: Judul Login Mengilap
+   ==================================================== */
+.shiny-title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: transparent;
+  background: linear-gradient(45deg, var(--color-gradient-light), var(--color-gradient-gold), var(--color-gradient-light));
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 2.5s linear infinite;
+}
+
+/* ====================================================
+   🧩 FORM INPUT GROUP: Email dan Password
+   ==================================================== */
+.input-group {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+/* Icon email/password (posisi kiri input) */
+.input-group i.fa-envelope,
+.input-group i.fa-lock {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: #000;
+  pointer-events: none;
+}
+
+/* Input box */
+.input-group input {
+  width: 100%;
+  padding: 12px 40px 12px 38px;               /* Padding kiri untuk ikon */
+  border: 2px solid transparent;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+}
+
+/* Fokus input */
+.input-group input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  box-shadow: 0 0 5px var(--accent-color);
+}
+
+/* Jika input invalid */
+.input-group input.is-invalid {
+  border-color: red;
+}
+
+/* ====================================================
+   👁 TOGGLE PASSWORD
+   ==================================================== */
+.toggle-password {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: #000;
+  font-size: 1.1rem;
+}
+
+/* Placeholder input */
+.login-box input::placeholder {
+  color: #aaa;
+}
+
+/* ====================================================
+   🟨 TOMBOL LOGIN
+   ==================================================== */
+.gold-button {
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--color-primary);
+  background: linear-gradient(45deg, var(--color-gradient-light), var(--color-gradient-gold), var(--color-gradient-light));
+  background-size: 200% auto;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  animation: shine 2.5s linear infinite;
+  transition: transform var(--transition-speed);
+  width: 100%;
+}
+
+.gold-button:hover {
+  transform: scale(1.05);
+}
+
+/* ====================================================
+   ❗ PESAN ERROR
+   ==================================================== */
+.error-message {
+  color: red;
+  font-size: 0.85rem;
+  text-align: left;
+  margin-top: -12px;
+  margin-bottom: 8px;
+  padding-left: 6px;
+}
+
+/* ====================================================
+   📱 RESPONSIVE: Untuk layar kecil (HP)
+   ==================================================== */
+@media (max-width: 480px) {
+  body {
+    padding: 24px;
+  }
+
+  .login-box {
+    padding: 24px 20px;
+    box-shadow: 0 0 10px var(--shadow-color);
+  }
+
+  .shiny-title {
+    font-size: 1.5rem;
+  }
+
+  .gold-button {
+    font-size: 1rem;
+    padding: 10px 20px;
+  }
+
+  .input-group input {
+    font-size: 0.95rem;
+    padding: 10px 38px 10px 36px;
+  }
+
+  .toggle-password {
+    font-size: 1rem;
+  }
+}
+
+/* ====================================================
+   🎞️ ANIMASI (Shine, Bounce, Shadow)
+   ==================================================== */
+@keyframes shine {
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes bounceDrop {
+  0%   { transform: translateY(-200px); }
+  35%  { transform: translateY(40px); }
+  55%  { transform: translateY(-20px); }
+  70%  { transform: translateY(10px); }
+  80%  { transform: translateY(-5px); }
+  90%  { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes shadowScale {
+  0%   { transform: scaleX(0.6); opacity: 0.2; }
+  35%  { transform: scaleX(1.1); opacity: 0.4; }
+  55%  { transform: scaleX(0.85); opacity: 0.3; }
+  70%  { transform: scaleX(1.05); opacity: 0.35; }
+  80%  { transform: scaleX(0.95); opacity: 0.3; }
+  90%  { transform: scaleX(1.02); opacity: 0.32; }
+  100% { transform: scaleX(1); opacity: 0.3; }
+}
+
+/* ====================================================
+   📦 KHUSUS SPLASH LOGO
+   ==================================================== */
+.logo-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* Logo utama dengan animasi jatuh */
+.logo {
+  width: clamp(100px, 20vw, 180px);
+  height: auto;
+  display: block;
+  animation: bounceDrop 2.2s ease-out forwards;
+}
+
+/* ✅ Bayangan logo — sekarang akan tampil karena variabel diperbaiki */
+.shadow {
+  width: clamp(100px, 20vw, 160px);
+  height: 18px;
+  background: var(--color-shadow); /* Sudah diperbaiki agar tidak null */
+  border-radius: 50%;
+  filter: blur(var(--shadow-blur));
+  opacity: var(--shadow-opacity);
+  transform: scaleX(1);
+  animation: shadowScale 2.2s ease-out forwards;
+}
+
+/* Judul dengan efek kilap seperti logo */
+.title {
+  margin-top: 36px;
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  text-align: center;
+  color: transparent;
+  background: linear-gradient(to right, var(--color-gradient-light), var(--color-gradient-gold), var(--color-gradient-light));
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shine 3s linear infinite;
+}

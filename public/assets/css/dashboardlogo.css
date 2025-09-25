@@ -1,0 +1,112 @@
+/* ====================================================
+   ⚙️ ROOT VARIABLES: Global Theme Colors & Effects
+   ==================================================== */
+:root {
+  --color-primary: #4B0082; /* Indigo */
+  --color-shadow: rgba(0, 0, 0, 0.35);
+  --shadow-blur: 10px;
+  --shadow-opacity: 0.35;
+
+  --color-gradient-light: #fff7d1;
+  --color-gradient-gold: #ffcc00;
+}
+
+/* ====================================================
+   🔻 LOGO CONTAINER (PINETMART): Wrapper Flex Centered
+   ==================================================== */
+.logo-pinetmart {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+
+  /* Tambahan jarak dari atas agar logo tampil lebih ke bawah */
+  margin-top: 120px; /* ← kamu bisa sesuaikan nilai ini */
+}
+
+/* ====================================================
+   🖼️ LOGO IMAGE: Jatuh dengan animasi bounce
+   ==================================================== */
+.logo-pinetmart .logo {
+  width: clamp(100px, 20vw, 180px);
+  height: auto;
+  display: block;
+  animation: bounceDrop 2.2s ease-out forwards;
+}
+
+/* ====================================================
+   🌑 SHADOW ELEMENT: Bayangan elips lembut
+   ==================================================== */
+.logo-pinetmart .shadow {
+  width: clamp(100px, 20vw, 160px);
+  height: 18px;
+  background: var(--color-shadow);
+  border-radius: 50%;
+  filter: blur(var(--shadow-blur));
+  opacity: var(--shadow-opacity);
+  transform: scaleX(1);
+  animation: shadowScale 2.2s ease-out forwards;
+}
+
+/* ====================================================
+   ✨ TITLE: Efek kilap pada teks header (opsional)
+   ==================================================== */
+.title {
+  margin-top: 36px;
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  text-align: center;
+  color: transparent;
+  background: linear-gradient(
+    to right,
+    var(--color-gradient-light),
+    var(--color-gradient-gold),
+    var(--color-gradient-light)
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: shine 3s linear infinite;
+}
+
+/* ====================================================
+   🎞️ KEYFRAMES: Animasi jatuh, bayangan, dan shine
+   ==================================================== */
+@keyframes bounceDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-100px) scale(1.2);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(20px) scale(1);
+  }
+  80% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes shadowScale {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.5);
+  }
+  60% {
+    opacity: 0.3;
+    transform: scaleX(1.2);
+  }
+  100% {
+    opacity: var(--shadow-opacity);
+    transform: scaleX(1);
+  }
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}

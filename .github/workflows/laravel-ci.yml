@@ -1,0 +1,73 @@
+name: Laravel CI
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: management   # <-- pastikan sama dengan DB_DATABASE di .env.ci
+        options: >-
+          --health-cmd="mysqladmin ping --silent -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction --optimize-autoloader
+
+      - name: Copy CI env
+        run: cp .env.ci .env
+        # Pastikan .env.ci sudah ada di root repo dan DB_HOST di .env.ci = mysql
+
+      - name: Generate app key
+        run: php artisan key:generate --ansi
+
+      - name: Wait for MySQL to be ready
+        run: |
+          echo "Waiting for MySQL (mysql:3306) to be ready..."
+          # loop until PHP can connect to the DB using the CI credentials
+          until php -r 'try{ new PDO("mysql:host=mysql;port=3306;dbname=management","root","root"); exit(0);} catch (Exception $e) { exit(1); }'; do
+            echo "MySQL not ready yet - sleeping 2s..."
+            sleep 2
+          done
+          echo "MySQL is ready."
+
+      - name: Storage link (optional)
+        run: php artisan storage:link || true
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Run tests
+        run: php artisan test --testsuite=Feature || php artisan test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
