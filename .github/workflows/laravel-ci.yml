@@ -131,4 +131,4 @@ jobs:
           DB_DATABASE: management
           DB_USERNAME: root
           DB_PASSWORD: root
-        run: php artisan test --stop-on-failure
+        run: php artisan test --stop-on-failure -v
