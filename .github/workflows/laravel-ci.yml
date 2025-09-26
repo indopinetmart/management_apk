@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop
+      - develop   # workflow jalan kalau ada push ke branch main / develop
 
 jobs:
   # =============================
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mysql:
+      mysql:                      # service MySQL untuk test CI
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: root
@@ -29,36 +29,43 @@ jobs:
           --health-retries=5
 
     steps:
+      # 1. Ambil kode dari repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      # 2. Setup PHP sesuai versi project
       - name: Setup PHP 8.2
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
 
+      # 3. Install dependency composer
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      # 4. Pakai env untuk CI (opsional)
       - name: Copy CI Environment
-        run: cp .env.ci .env || echo "CI env file not found, skipping"
+        run: cp .env.ci .env || echo "⚠️ CI env file tidak ada, dilewati"
 
+      # 5. Generate app key biar bisa jalan
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+      # 6. (Opsional) jalankan migration + test
       - name: Skip Migrations & Tests
-        run: echo "Migrations & tests dilewati di CI"
+        run: echo "✅ CI jalan, tapi migrations & tests dilewati"
 
   # =============================
-  # 2️⃣ Continuous Deployment (CD) Zero Downtime + Backup + Cleanup
+  # 2️⃣ Continuous Deployment (CD)
   # =============================
   cd:
     name: Deploy Laravel Zero Downtime (Hostinger)
     runs-on: ubuntu-latest
-    needs: ci
+    needs: ci   # CD hanya jalan kalau CI sukses
 
     steps:
+      # 1. Deploy via SSH ke Hostinger
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -76,7 +83,7 @@ jobs:
             APP_DIR=~/domains/management-pinetmart.srf-group.com
             WEB_ROOT=$APP_DIR/public_html
             RELEASES_DIR=$APP_DIR/releases
-            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
+            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)   # nama release pakai timestamp
             NEW_RELEASE=$RELEASES_DIR/$RELEASE_NAME
             BACKUP_FOLDER=$APP_DIR/backup_$RELEASE_NAME
 
@@ -97,9 +104,8 @@ jobs:
             # -------------------------------
             # 4. Shared resource (env & storage)
             # -------------------------------
-            echo "📄 Pasang .env dari secrets"
-            echo "${{ secrets.ENV_PRODUCTION }}" > $APP_DIR/.env
-
+            echo "📄 Gunakan .env lokal (manual, bukan dari GitHub Secrets)"
+            # NOTE: Karena .env Anda dibuat manual, tidak overwrite di sini
             ln -sfn $APP_DIR/.env $NEW_RELEASE/.env
             ln -sfn $APP_DIR/storage $NEW_RELEASE/storage
 
