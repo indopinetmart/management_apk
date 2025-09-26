@@ -164,7 +164,7 @@ jobs:
             # -------------------------------
             echo "🗑️ Hapus file sensitif dari Laravel folder (opsional)"
             rm -rf $LARAVEL_DIR/.git
-            rm -f $LARAVEL_DIR/composer.json $LARAVEL_DIR/composer.lock $LARAVEL_DIR/phpunit.xml $LARAVEL_DIR/README.md $LARAVEL_DIR/LICENSE
+            rm -f $LARAVEL_DIR/phpunit.xml $LARAVEL_DIR/README.md $LARAVEL_DIR/LICENSE
 
             # -------------------------------
             # 11. Nonaktifkan maintenance mode
