@@ -1,5 +1,6 @@
 name: Laravel CI/CD - management_apk
 
+# 🔹 Workflow jalan saat push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -27,9 +28,11 @@ jobs:
           --health-retries=5
 
     steps:
+      # 🔹 Ambil kode dari repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      # 🔹 Setup PHP untuk Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -37,15 +40,19 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
+      # 🔹 Install dependency Laravel
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      # 🔹 Copy env khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
+      # 🔹 Generate APP_KEY
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+      # 🔹 Migrasi database untuk CI
       - name: Run Migrations (CI only)
         env:
           DB_CONNECTION: mysql
@@ -56,6 +63,7 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
+      # 🔹 Jalankan unit test
       - name: Run Tests (CI only)
         env:
           DB_CONNECTION: mysql
@@ -66,17 +74,21 @@ jobs:
           DB_PASSWORD: root
         run: vendor/bin/phpunit --stop-on-failure --testdox
 
+      # 🔹 Setup Node.js untuk build frontend
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
 
+      # 🔹 Install dependency frontend
       - name: Install NPM Dependencies
         run: npm install
 
+      # 🔹 Build asset dengan Vite
       - name: Build Vite Assets
         run: npm run build
 
+      # 🔹 Simpan hasil build sebagai artifact (akan dipakai di CD)
       - name: Archive build folder
         uses: actions/upload-artifact@v4
         with:
@@ -89,18 +101,26 @@ jobs:
   cd:
     name: Deploy to Hostinger via SSH + Rsync
     runs-on: ubuntu-latest
-    needs: ci
+    needs: ci # hanya jalan kalau CI sukses
 
     steps:
+      # 🔹 Ambil kode repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      # 🔹 Ambil hasil build dari CI
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: public-build
           path: ./public_build
 
+      # 🔹 Test SSH connection biar gampang debug key
+      - name: Test SSH Connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -p 65002 u943606636@145.223.108.62 "echo '✅ SSH connection success'"
+
+      # 🔹 Deploy file project ke Hostinger
       - name: Deploy to Hostinger via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -112,11 +132,13 @@ jobs:
             #!/bin/bash
             set -e
 
-            # 🔹 Pastikan folder project ada
+            echo "🚀 Mulai deployment ke Hostinger..."
+
+            # Pastikan folder project ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
-            # 🔹 Git pull / clone otomatis
+            # Git clone / pull
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -124,21 +146,20 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # 🔹 Deploy file project saja
             echo "✅ File project terbaru sudah dipull dari repo"
 
-            # 🔹 Pakai .env.ci sementara jika .env belum ada
+            # Copy env kalau belum ada
             if [ ! -f ".env" ]; then
               cp .env.ci .env
               echo "✅ Menggunakan .env.ci sementara agar Laravel bisa jalan"
             else
-              echo "ℹ️ .env sudah ada, deploy file project saja"
+              echo "ℹ️ .env sudah ada, tidak diganti"
             fi
 
-            # 🔹 Install dependencies Laravel (tanpa memaksa DB)
+            # Install dependency Laravel (skip error kalau DB belum siap)
             composer install --no-dev --optimize-autoloader || true
 
-            # 🔹 Clear & cache Laravel (skip error DB)
+            # Clear & cache config Laravel
             php artisan config:clear || true
             php artisan route:clear || true
             php artisan view:clear || true
@@ -147,15 +168,21 @@ jobs:
             php artisan route:cache || true
             php artisan view:cache || true
 
-            # 🔹 Set permission folder penting
+            # Set permission storage & cache
             chmod -R 775 storage bootstrap/cache || true
 
-            # 🔹 Restart queue worker jika ada (skip error DB)
+            # Restart queue worker jika ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart || true
             fi
 
+            echo "✅ Deployment backend selesai"
+
+      # 🔹 Upload hasil build frontend via rsync
       - name: Upload public/build to Hostinger via Rsync
         run: |
-          rsync -avz --delete -e "ssh -p 65002 -i ${{ secrets.HOSTINGER_SSH_KEY }}" \
+          echo "${{ secrets.HOSTINGER_SSH_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+
+          rsync -avz --delete -e "ssh -p 65002 -i private_key.pem -o StrictHostKeyChecking=no" \
           ./public_build/ u943606636@145.223.108.62:~/public_html/management_apk/public/build
