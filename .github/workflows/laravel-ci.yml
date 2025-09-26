@@ -1,6 +1,6 @@
 name: Laravel CI/CD - management_apk
 
-# 🔹 Workflow berjalan otomatis ketika ada push ke branch main
+# 🔹 Workflow jalan saat push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -28,10 +28,8 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1️⃣ Checkout kode dari GitHub
       - uses: actions/checkout@v4
 
-      # 2️⃣ Setup PHP versi 8.2 dengan ekstensi Laravel butuh
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -39,19 +37,15 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
-      # 3️⃣ Install dependencies PHP
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      # 4️⃣ Copy environment khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
-      # 5️⃣ Generate APP_KEY Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 6️⃣ Jalankan migration di database MySQL CI
       - name: Run Migrations
         env:
           DB_CONNECTION: mysql
@@ -62,7 +56,6 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
-      # 7️⃣ Jalankan PHPUnit test
       - name: Run Tests
         env:
           DB_CONNECTION: mysql
@@ -79,73 +72,99 @@ jobs:
   cd:
     name: Deploy to Hostinger
     runs-on: ubuntu-latest
-    needs: ci # hanya jalan kalau CI sukses ✅
+    needs: ci
 
     steps:
-      # 1️⃣ Checkout repo (biar action punya akses file GitHub)
       - uses: actions/checkout@v4
 
-      # 2️⃣ Deploy via SSH ke Hostinger
+      # Download build artifact hasil Vite
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: public-build
+          path: ./public_build
+
       - name: Deploy to Hostinger via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: 145.223.108.62                # IP Hostinger kamu
-          username: u943606636                # Username SSH Hostinger
-          key: ${{ secrets.HOSTINGER_SSH_KEY }} # Private key Ed25519 yang kamu buat
-          port: 65002                         # Port SSH Hostinger
+          host: 145.223.108.62
+          username: u943606636
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: 65002
           script: |
-            # Masuk ke folder project
-            cd ~/public_html
+            #!/bin/bash
+            set -e
 
-            # 🔄 Tarik kode terbaru dari GitHub
+            # Masuk ke folder Laravel
+            mkdir -p ~/public_html/management_apk
+            cd ~/public_html/management_apk
+
+            # =============================
+            # Backup database dulu (opsional)
+            # =============================
+            if command -v mysqldump > /dev/null 2>&1; then
+              mkdir -p ~/backups
+              DB_NAME="management_db"
+              DB_USER="septian"
+              DB_PASS="Septianganteng"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              mysqldump -u$DB_USER -p$DB_PASS $DB_NAME > ~/backups/${DB_NAME}_backup_$TIMESTAMP.sql
+              echo "✅ Database backup berhasil: ~/backups/${DB_NAME}_backup_$TIMESTAMP.sql"
+            else
+              echo "⚠️ mysqldump tidak tersedia, backup DB dilewati"
+            fi
+
+            # 🔄 Pull kode terbaru
             if [ ! -d ".git" ]; then
-              # Clone pertama kali (pakai HTTPS supaya gak perlu key GitHub)
               git clone https://github.com/indopinetmart/management_apk.git .
             else
-              # Kalau sudah ada repo, ambil update terbaru
               git fetch origin main
               git reset --hard origin/main
             fi
 
-            # 📄 Copy .env.production jadi .env
+            # 📄 Copy .env.production
             if [ -f ".env.production" ]; then
               cp .env.production .env
               echo "✅ .env.production dicopy ke .env"
-            else
-              echo "⚠️ WARNING: .env.production tidak ditemukan!"
             fi
 
-            # 📦 Install dependencies PHP (tanpa dev)
+            # 📦 Composer install
             composer install --no-dev --optimize-autoloader
 
-            # 🔧 Clear cache Laravel
+            # 🔧 Clear & cache Laravel
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan cache:clear
 
-            # 🔧 Rebuild cache Laravel
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # 🗄️ Jalankan migration di production
-            php artisan migrate --force
+            # 🔑 Set permission folder penting
+            chmod -R 775 storage bootstrap/cache
 
-            # 🎨 Build asset front-end (jika Node.js tersedia di server)
-            if command -v npm > /dev/null 2>&1; then
-              npm install
-              npm run build
-            else
-              echo "⚠️ Node.js tidak ada di server, build asset sebaiknya dilakukan di GitHub Actions"
-            fi
-
-            # 🔑 Atur permission folder penting
-            chmod -R 755 storage bootstrap/cache
-
-            # 🚦 Restart queue worker kalau ada
+            # 🚦 Restart queue worker
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
 
-            echo "✅ Deployment selesai di Hostinger 🎉"
+            # =============================
+            # Upload Vite build ke Hostinger
+            # =============================
+            rm -rf public/build
+            mkdir -p public/build
+            exit 0
+
+      # Upload artifact Vite build ke folder public/build
+      - name: Upload public/build to Hostinger
+        uses: burnett01/rsync-deployments@v4
+        with:
+          switches: -avz --delete
+          path: ./public_build/
+          remote_path: ~/public_html/management_apk/public/build
+          remote_host: 145.223.108.62
+          remote_user: u943606636
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: 65002
+
