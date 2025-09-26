@@ -8,7 +8,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\VerifyEmailController;
 use App\Http\Controllers\Api\AuthorizeController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\App_ipm\ProfileController;
+use App\Http\Controllers\App_Ipm\ProfileController;
 use App\Http\Controllers\Auth\SessionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\DashboardController;
