@@ -1,6 +1,6 @@
 name: Laravel CI/CD - management_apk
 
-# 🔹 Workflow jalan saat push ke branch main
+# 🔹 Workflow jalan otomatis ketika ada push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -10,7 +10,7 @@ jobs:
   # 1️⃣ Continuous Integration (CI)
   # =============================
   ci:
-    name: Laravel CI
+    name: Laravel CI + Build Frontend
     runs-on: ubuntu-latest
 
     services:
@@ -28,8 +28,10 @@ jobs:
           --health-retries=5
 
     steps:
+      # 🔹 Checkout kode dari repo
       - uses: actions/checkout@v4
 
+      # 🔹 Setup PHP 8.2 dengan ekstensi penting Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -37,15 +39,19 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
+      # 🔹 Install dependencies Laravel
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      # 🔹 Copy environment khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
+      # 🔹 Generate APP_KEY Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+      # 🔹 Jalankan migration di CI database
       - name: Run Migrations
         env:
           DB_CONNECTION: mysql
@@ -56,6 +62,7 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
+      # 🔹 Jalankan unit test Laravel
       - name: Run Tests
         env:
           DB_CONNECTION: mysql
@@ -66,24 +73,47 @@ jobs:
           DB_PASSWORD: root
         run: vendor/bin/phpunit --stop-on-failure --testdox
 
+      # =============================
+      # Build frontend (Vite)
+      # =============================
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Build Vite Assets
+        run: npm run build
+
+      # 🔹 Archive folder build untuk CD
+      - name: Archive build folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-build
+          path: public/build
+
   # =============================
   # 2️⃣ Continuous Deployment (CD)
   # =============================
   cd:
-    name: Deploy to Hostinger
+    name: Deploy to Hostinger via SSH + Rsync
     runs-on: ubuntu-latest
     needs: ci
 
     steps:
+      # 🔹 Checkout kode repo (untuk reference)
       - uses: actions/checkout@v4
 
-      # Download build artifact hasil Vite
+      # 🔹 Download artifact hasil build frontend
       - name: Download build artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: public-build
           path: ./public_build
 
+      # 🔹 Deploy ke server via SSH
       - name: Deploy to Hostinger via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -95,26 +125,11 @@ jobs:
             #!/bin/bash
             set -e
 
-            # Masuk ke folder Laravel
+            # 🔹 Pastikan folder management_apk ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
-            # =============================
-            # Backup database dulu (opsional)
-            # =============================
-            if command -v mysqldump > /dev/null 2>&1; then
-              mkdir -p ~/backups
-              DB_NAME="management_db"
-              DB_USER="septian"
-              DB_PASS="Septianganteng"
-              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-              mysqldump -u$DB_USER -p$DB_PASS $DB_NAME > ~/backups/${DB_NAME}_backup_$TIMESTAMP.sql
-              echo "✅ Database backup berhasil: ~/backups/${DB_NAME}_backup_$TIMESTAMP.sql"
-            else
-              echo "⚠️ mysqldump tidak tersedia, backup DB dilewati"
-            fi
-
-            # 🔄 Pull kode terbaru
+            # 🔹 Pull kode terbaru / clone jika pertama kali
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -122,49 +137,31 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # 📄 Copy .env.production
+            # 🔹 Copy .env.production ke .env
             if [ -f ".env.production" ]; then
               cp .env.production .env
-              echo "✅ .env.production dicopy ke .env"
             fi
 
-            # 📦 Composer install
+            # 🔹 Install dependencies Laravel & clear/cache
             composer install --no-dev --optimize-autoloader
-
-            # 🔧 Clear & cache Laravel
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan cache:clear
-
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # 🔑 Set permission folder penting
+            # 🔹 Set permission folder penting
             chmod -R 775 storage bootstrap/cache
 
-            # 🚦 Restart queue worker
+            # 🔹 Restart queue worker jika ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
 
-            # =============================
-            # Upload Vite build ke Hostinger
-            # =============================
-            rm -rf public/build
-            mkdir -p public/build
-            exit 0
-
-      # Upload artifact Vite build ke folder public/build
-      - name: Upload public/build to Hostinger
-        uses: burnett01/rsync-deployments@v4
-        with:
-          switches: -avz --delete
-          path: ./public_build/
-          remote_path: ~/public_html/management_apk/public/build
-          remote_host: 145.223.108.62
-          remote_user: u943606636
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: 65002
-
+      # 🔹 Upload folder public_build ke server dengan rsync
+      - name: Upload public/build to Hostinger via Rsync
+        run: |
+          rsync -avz --delete -e "ssh -p 65002 -i ${{ secrets.HOSTINGER_SSH_KEY }}" \
+          ./public_build/ u943606636@145.223.108.62:~/public_html/management_apk/public/build
