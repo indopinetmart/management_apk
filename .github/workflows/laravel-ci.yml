@@ -158,7 +158,6 @@ jobs:
             # -------------------------------
             echo "🔒 Set permission folder storage, bootstrap/cache, public"
             chmod -R 755 storage bootstrap/cache public
-            chown -R $USER:$USER storage bootstrap/cache public
 
             echo "✅ Deployment selesai!"
             echo "💾 Backup lama disimpan di $BACKUP_FOLDER"
