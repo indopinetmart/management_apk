@@ -89,11 +89,23 @@ jobs:
             set -e
 
             # Masuk ke folder project
-            cd ~/public_html/management_apk
+            cd ~/public_html
 
             # Tarik update terbaru dari repo
-            git fetch origin main
-            git reset --hard origin/main
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/indopinetmart/management_apk.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # Copy env production jadi .env
+            if [ -f ".env.production" ]; then
+              cp .env.production .env
+              echo "✅ .env.production dicopy ke .env"
+            else
+              echo "⚠️ WARNING: .env.production tidak ditemukan!"
+            fi
 
             # Install dependencies PHP
             composer install --no-dev --optimize-autoloader
