@@ -1,4 +1,4 @@
-name: Laravel CI/CD - Management Pinetmart Subdomain (Production Secure)
+name: Laravel CI/CD - Management Pinetmart Subdomain (Production Secure + Public Backup)
 
 on:
   push:
@@ -7,6 +7,9 @@ on:
       - develop
 
 jobs:
+  # =============================
+  # 1️⃣ Continuous Integration (CI)
+  # =============================
   ci:
     name: Laravel CI
     runs-on: ubuntu-latest
@@ -47,8 +50,11 @@ jobs:
       - name: Skip Migrations & Tests
         run: echo "Migrations & tests dilewati di CI"
 
+  # =============================
+  # 2️⃣ Continuous Deployment (CD) Production Secure
+  # =============================
   cd:
-    name: Deploy Laravel to Hostinger (Secure Production)
+    name: Deploy Laravel to Hostinger (Secure Production + Public Backup)
     runs-on: ubuntu-latest
     needs: ci
 
@@ -62,35 +68,50 @@ jobs:
           port: ${{ secrets.HOSTINGER_PORT }}
           script: |
             set -e
-            echo "🚀 Mulai deployment Laravel (Secure Production)..."
+            echo "🚀 Mulai deployment Laravel (Secure Production + Public Backup)..."
 
             # -------------------------------
             # 1. Folder target & backup
             # -------------------------------
-            TARGET=~/domains/management-pinetmart.srf-group.com/public_html
+            WEB_ROOT=~/domains/management-pinetmart.srf-group.com/public_html
+            LARAVEL_DIR=~/domains/management-pinetmart.srf-group.com/management_apk
             BACKUP_FOLDER=~/domains/management-pinetmart.srf-group.com/backup_$(date +%Y%m%d_%H%M%S)
             DB_BACKUP=~/domains/management-pinetmart.srf-group.com/db_backup_$(date +%Y%m%d_%H%M%S).sql
 
+            mkdir -p $BACKUP_FOLDER
+
             # -------------------------------
-            # 2. Backup DB & storage
+            # 2. Backup DB
             # -------------------------------
             echo "💾 Backup database"
             mysqldump -u ${{ secrets.DB_USER }} -p${{ secrets.DB_PASS }} ${{ secrets.DB_NAME }} > $DB_BACKUP || echo "⚠️ DB backup gagal"
 
-            echo "💾 Backup storage"
-            mkdir -p $BACKUP_FOLDER/storage
-            cp -r $TARGET/storage/* $BACKUP_FOLDER/storage/
+            # -------------------------------
+            # 3. Backup storage Laravel + public_html (upload user)
+            # -------------------------------
+            echo "💾 Backup storage Laravel"
+            cp -r $LARAVEL_DIR/storage $BACKUP_FOLDER/storage
+
+            echo "💾 Backup storage publik (public_html/uploads atau storage publik)"
+            mkdir -p $BACKUP_FOLDER/public
+            if [ -d "$WEB_ROOT/storage" ]; then
+              cp -r $WEB_ROOT/storage $BACKUP_FOLDER/public/storage
+            fi
+            if [ -d "$WEB_ROOT/uploads" ]; then
+              cp -r $WEB_ROOT/uploads $BACKUP_FOLDER/public/uploads
+            fi
 
             # -------------------------------
-            # 3. Aktifkan maintenance mode
+            # 4. Aktifkan maintenance mode
             # -------------------------------
             echo "🛠️ Aktifkan maintenance mode"
-            php $TARGET/artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
+            php $LARAVEL_DIR/artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
 
             # -------------------------------
-            # 4. Clone/update repo Laravel
+            # 5. Clone / update repo Laravel
             # -------------------------------
-            cd $TARGET
+            mkdir -p $LARAVEL_DIR
+            cd $LARAVEL_DIR
             if [ ! -d ".git" ]; then
               echo "📥 Clone repo Laravel"
               git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
@@ -101,54 +122,62 @@ jobs:
             fi
 
             # -------------------------------
-            # 5. Copy .env production jika belum ada
+            # 6. Copy .env production jika belum ada
             # -------------------------------
             if [ ! -f ".env" ]; then
               echo "⚠️ .env production tidak ada. Harap upload manual!"
             fi
 
             # -------------------------------
-            # 6. Install Composer dependencies production
+            # 7. Install Composer dependencies production
             # -------------------------------
             echo "🔧 Install composer dependencies (production)"
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
             # -------------------------------
-            # 7. Run migrations & optional seed
+            # 8. Jalankan migrate & cache
             # -------------------------------
             echo "🗄️ Jalankan migrate"
             php artisan migrate --force
-            # php artisan db:seed --class=SeederName --force  # opsional
 
-            # -------------------------------
-            # 8. Cache Laravel
-            # -------------------------------
             echo "⚡ Cache config, route, view"
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
             # -------------------------------
-            # 9. Set permission
+            # 9. Duplicate index.php & .htaccess ke web root
             # -------------------------------
-            echo "🔒 Set permission storage, bootstrap/cache, public"
-            chmod -R 755 storage bootstrap/cache public
-            chmod 644 .env artisan
+            echo "📄 Duplicate index.php & .htaccess ke public_html"
+            cp $LARAVEL_DIR/public/index.php $WEB_ROOT/index.php
+            cp $LARAVEL_DIR/public/.htaccess $WEB_ROOT/.htaccess
+
+            # Update paths di index.php agar menunjuk ke folder Laravel
+            sed -i "s|../vendor/autoload.php|../management_apk/vendor/autoload.php|" $WEB_ROOT/index.php
+            sed -i "s|../bootstrap/app.php|../management_apk/bootstrap/app.php|" $WEB_ROOT/index.php
 
             # -------------------------------
-            # 10. Hapus file sensitif dari public_html
+            # 10. Set permission folder penting
             # -------------------------------
-            echo "🗑️ Hapus file sensitif dari public_html"
-            rm -rf .git
-            rm -f composer.json composer.lock artisan phpunit.xml README.md LICENSE
+            echo "🔒 Set permission storage, bootstrap/cache, public_html"
+            chmod -R 755 $LARAVEL_DIR/storage $LARAVEL_DIR/bootstrap/cache $WEB_ROOT
+            chmod 644 $LARAVEL_DIR/.env $LARAVEL_DIR/artisan $WEB_ROOT/index.php $WEB_ROOT/.htaccess
 
             # -------------------------------
-            # 11. Nonaktifkan maintenance mode
+            # 11. Hapus file sensitif dari Laravel dir (opsional)
+            # -------------------------------
+            echo "🗑️ Hapus file sensitif dari Laravel folder (opsional)"
+            rm -rf $LARAVEL_DIR/.git
+            rm -f $LARAVEL_DIR/composer.json $LARAVEL_DIR/composer.lock $LARAVEL_DIR/phpunit.xml $LARAVEL_DIR/README.md $LARAVEL_DIR/LICENSE
+
+            # -------------------------------
+            # 12. Nonaktifkan maintenance mode
             # -------------------------------
             echo "✅ Nonaktifkan maintenance mode"
-            php artisan up || echo "⚠️ Gagal disable maintenance mode"
+            php $LARAVEL_DIR/artisan up || echo "⚠️ Gagal disable maintenance mode"
 
             echo "✅ Deployment selesai!"
             echo "💾 Backup database: $DB_BACKUP"
-            echo "💾 Backup storage: $BACKUP_FOLDER/storage"
-            echo "🔒 public_html sudah aman, file sensitif dihapus"
+            echo "💾 Backup storage Laravel: $BACKUP_FOLDER/storage"
+            echo "💾 Backup storage publik: $BACKUP_FOLDER/public"
+            echo "🔒 public_html sudah aman, Laravel project di luar web root"
