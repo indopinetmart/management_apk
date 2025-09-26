@@ -1,4 +1,4 @@
-name: Laravel CI/CD - Management Pinetmart Subdomain (Production Secure + Public Backup)
+name: Laravel CI/CD - Management Pinetmart (Zero Downtime + Backup + Cleanup)
 
 on:
   push:
@@ -51,10 +51,10 @@ jobs:
         run: echo "Migrations & tests dilewati di CI"
 
   # =============================
-  # 2️⃣ Continuous Deployment (CD) Production Secure
+  # 2️⃣ Continuous Deployment (CD) Zero Downtime + Backup + Cleanup
   # =============================
   cd:
-    name: Deploy Laravel to Hostinger (Secure Production + Public Backup)
+    name: Deploy Laravel Zero Downtime (Hostinger)
     runs-on: ubuntu-latest
     needs: ci
 
@@ -68,111 +68,83 @@ jobs:
           port: ${{ secrets.HOSTINGER_PORT }}
           script: |
             set -e
-            echo "🚀 Mulai deployment Laravel (Secure Production + Public Backup)..."
+            echo "🚀 Zero Downtime Deploy Laravel..."
 
             # -------------------------------
-            # 1. Tentukan folder target & backup
+            # 1. Tentukan folder utama
             # -------------------------------
-            WEB_ROOT=~/domains/management-pinetmart.srf-group.com/public_html
-            LARAVEL_DIR=~/domains/management-pinetmart.srf-group.com/management_apk
-            BACKUP_FOLDER=~/domains/management-pinetmart.srf-group.com/backup_$(date +%Y%m%d_%H%M%S)
+            APP_DIR=~/domains/management-pinetmart.srf-group.com
+            WEB_ROOT=$APP_DIR/public_html
+            RELEASES_DIR=$APP_DIR/releases
+            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
+            NEW_RELEASE=$RELEASES_DIR/$RELEASE_NAME
+            BACKUP_FOLDER=$APP_DIR/backup_$RELEASE_NAME
 
+            # -------------------------------
+            # 2. Backup sebelum deploy
+            # -------------------------------
+            echo "💾 Backup storage & public_html"
             mkdir -p $BACKUP_FOLDER
+            cp -r $APP_DIR/storage $BACKUP_FOLDER/storage || echo "⚠️ Storage kosong"
+            cp -r $WEB_ROOT $BACKUP_FOLDER/public || echo "⚠️ Public kosong"
 
             # -------------------------------
-            # 2. Backup storage Laravel + public_html
+            # 3. Buat release baru
             # -------------------------------
-            echo "💾 Backup storage Laravel"
-            mkdir -p $LARAVEL_DIR/storage $LARAVEL_DIR/bootstrap/cache
-            cp -r $LARAVEL_DIR/storage $BACKUP_FOLDER/storage || echo "⚠️ Backup storage Laravel gagal, folder kosong"
-
-            echo "💾 Backup storage publik (public_html/uploads atau storage publik)"
-            mkdir -p $BACKUP_FOLDER/public
-            [ -d "$WEB_ROOT/storage" ] && cp -r $WEB_ROOT/storage $BACKUP_FOLDER/public/storage
-            [ -d "$WEB_ROOT/uploads" ] && cp -r $WEB_ROOT/uploads $BACKUP_FOLDER/public/uploads
+            mkdir -p $NEW_RELEASE
+            git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git $NEW_RELEASE
 
             # -------------------------------
-            # 3. Clone / update repo Laravel dengan aman
+            # 4. Shared resource (env & storage)
             # -------------------------------
-            mkdir -p $LARAVEL_DIR
-            cd $LARAVEL_DIR
+            echo "📄 Pasang .env dari secrets"
+            echo "${{ secrets.ENV_PRODUCTION }}" > $APP_DIR/.env
 
-            if [ -z "$(ls -A $LARAVEL_DIR)" ]; then
-              echo "📥 Clone repo Laravel"
-              git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
-            else
-              if [ ! -d ".git" ]; then
-                echo "⚠️ Folder ada tapi bukan repo git, hapus semua dan clone"
-                rm -rf $LARAVEL_DIR/*
-                git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
-              else
-                echo "🔄 Update repo Laravel"
-                git fetch origin main
-                git reset --hard origin/main
-              fi
-            fi
+            ln -sfn $APP_DIR/.env $NEW_RELEASE/.env
+            ln -sfn $APP_DIR/storage $NEW_RELEASE/storage
 
             # -------------------------------
-            # 4. Upload .env dari GitHub Secrets
+            # 5. Install dependencies + migrate + cache
             # -------------------------------
-            echo "📄 Menyimpan .env production dari secrets"
-            echo "${{ secrets.ENV_PRODUCTION }}" > $LARAVEL_DIR/.env
-
-            # -------------------------------
-            # 5. Aktifkan maintenance mode
-            # -------------------------------
-            echo "🛠️ Aktifkan maintenance mode"
-            php artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
-
-            # -------------------------------
-            # 6. Install Composer dependencies production
-            # -------------------------------
-            echo "🔧 Install composer dependencies (production)"
+            cd $NEW_RELEASE
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
-
-            # -------------------------------
-            # 7. Jalankan migrate & cache
-            # -------------------------------
-            echo "🗄️ Jalankan migrate"
             php artisan migrate --force
-
-            echo "⚡ Cache config, route, view"
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
             # -------------------------------
-            # 8. Duplicate index.php & .htaccess ke web root
+            # 6. Update symlink "current" ke release baru
             # -------------------------------
-            echo "📄 Duplicate index.php & .htaccess ke public_html"
-            cp $LARAVEL_DIR/public/index.php $WEB_ROOT/index.php
-            cp $LARAVEL_DIR/public/.htaccess $WEB_ROOT/.htaccess
-
-            sed -i "s|../vendor/autoload.php|../management_apk/vendor/autoload.php|" $WEB_ROOT/index.php
-            sed -i "s|../bootstrap/app.php|../management_apk/bootstrap/app.php|" $WEB_ROOT/index.php
+            ln -sfn $NEW_RELEASE $APP_DIR/current
 
             # -------------------------------
-            # 9. Set permission folder penting
+            # 7. Update public_html agar load current/
             # -------------------------------
-            echo "🔒 Set permission storage, bootstrap/cache, public_html"
-            chmod -R 755 $LARAVEL_DIR/storage $LARAVEL_DIR/bootstrap/cache $WEB_ROOT
-            [ -f "$LARAVEL_DIR/.env" ] && chmod 644 $LARAVEL_DIR/.env
-            chmod 644 $LARAVEL_DIR/artisan $WEB_ROOT/index.php $WEB_ROOT/.htaccess
+            cp $NEW_RELEASE/public/index.php $WEB_ROOT/index.php
+            cp $NEW_RELEASE/public/.htaccess $WEB_ROOT/.htaccess
+            sed -i "s|../vendor/autoload.php|../current/vendor/autoload.php|" $WEB_ROOT/index.php
+            sed -i "s|../bootstrap/app.php|../current/bootstrap/app.php|" $WEB_ROOT/index.php
 
             # -------------------------------
-            # 10. Hapus file sensitif (opsional)
+            # 8. Set permission
             # -------------------------------
-            echo "🗑️ Hapus file sensitif dari Laravel folder (opsional)"
-            rm -rf $LARAVEL_DIR/.git
-            rm -f $LARAVEL_DIR/phpunit.xml $LARAVEL_DIR/README.md $LARAVEL_DIR/LICENSE
+            chmod -R 755 $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache $WEB_ROOT
+            chmod 644 $APP_DIR/.env $WEB_ROOT/index.php $WEB_ROOT/.htaccess
 
             # -------------------------------
-            # 11. Nonaktifkan maintenance mode
+            # 9. Cleanup file sensitif
             # -------------------------------
-            echo "✅ Nonaktifkan maintenance mode"
-            php artisan up || echo "⚠️ Gagal disable maintenance mode"
+            rm -rf $NEW_RELEASE/.git
+            rm -f $NEW_RELEASE/phpunit.xml $NEW_RELEASE/README.md $NEW_RELEASE/LICENSE
 
-            echo "✅ Deployment selesai!"
-            echo "💾 Backup storage Laravel: $BACKUP_FOLDER/storage"
-            echo "💾 Backup storage publik: $BACKUP_FOLDER/public"
-            echo "🔒 public_html sudah aman, Laravel project di luar web root"
+            # -------------------------------
+            # 🔟 Cleanup release lama (keep 5 terakhir)
+            # -------------------------------
+            echo "🧹 Hapus release lama, simpan 5 terakhir"
+            cd $RELEASES_DIR
+            ls -1t | tail -n +3 | xargs rm -rf || true
+
+            echo "✅ Deployment selesai tanpa downtime!"
+            echo "📂 Release aktif: $RELEASE_NAME"
+            echo "💾 Backup: $BACKUP_FOLDER"
