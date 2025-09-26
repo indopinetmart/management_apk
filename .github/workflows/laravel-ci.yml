@@ -1,6 +1,5 @@
-name: Laravel CI/CD - Management Pinetmart Subdomain (Backup + Final)
+name: Laravel CI/CD - Management Pinetmart Subdomain (Production Secure)
 
-# Trigger workflow saat ada push ke branch main atau develop
 on:
   push:
     branches:
@@ -8,15 +7,11 @@ on:
       - develop
 
 jobs:
-  # =============================
-  # 1️⃣ Continuous Integration (CI)
-  # =============================
   ci:
     name: Laravel CI
     runs-on: ubuntu-latest
 
     services:
-      # Menjalankan MySQL untuk testing local
       mysql:
         image: mysql:8
         env:
@@ -31,43 +26,34 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1. Checkout kode repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # 2. Setup PHP versi 8.2 + ekstensi Laravel
-      - name: Setup PHP
+      - name: Setup PHP 8.2
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
 
-      # 3. Install composer dependencies untuk CI
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      # 4. Copy file environment khusus CI (opsional)
       - name: Copy CI Environment
         run: cp .env.ci .env || echo "CI env file not found, skipping"
 
-      # 5. Generate APP_KEY Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 6. Skip migrate & test di CI (akan dilakukan di CD)
       - name: Skip Migrations & Tests
-        run: echo "Migrations & tests dilewati, env manual nanti"
+        run: echo "Migrations & tests dilewati di CI"
 
-  # =============================
-  # 2️⃣ Continuous Deployment (CD) dengan backup + permission
-  # =============================
   cd:
-    name: Deploy Laravel to Hostinger with Backup + Permission
+    name: Deploy Laravel to Hostinger (Secure Production)
     runs-on: ubuntu-latest
     needs: ci
 
     steps:
-      - name: Deploy via SSH (HTTPS clone + backup + key + permissions)
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.HOSTINGER_HOST }}
@@ -76,36 +62,37 @@ jobs:
           port: ${{ secrets.HOSTINGER_PORT }}
           script: |
             set -e
-            echo "🚀 Mulai deployment Laravel 11 dengan backup dan key..."
+            echo "🚀 Mulai deployment Laravel (Secure Production)..."
 
             # -------------------------------
-            # 1. Definisi folder target & backup
+            # 1. Folder target & backup
             # -------------------------------
             TARGET=~/domains/management-pinetmart.srf-group.com/public_html
             BACKUP_FOLDER=~/domains/management-pinetmart.srf-group.com/backup_$(date +%Y%m%d_%H%M%S)
+            DB_BACKUP=~/domains/management-pinetmart.srf-group.com/db_backup_$(date +%Y%m%d_%H%M%S).sql
 
             # -------------------------------
-            # 2. Backup folder Laravel lama jika ada
+            # 2. Backup DB & storage
             # -------------------------------
-            if [ -d "$TARGET" ] && [ "$(ls -A $TARGET)" ]; then
-              echo "💾 Backup folder lama ke $BACKUP_FOLDER"
-              mkdir -p $BACKUP_FOLDER
-              cp -r $TARGET/* $BACKUP_FOLDER/
-            else
-              echo "Folder lama kosong, tidak perlu backup"
-            fi
+            echo "💾 Backup database"
+            mysqldump -u ${{ secrets.DB_USER }} -p${{ secrets.DB_PASS }} ${{ secrets.DB_NAME }} > $DB_BACKUP || echo "⚠️ DB backup gagal"
+
+            echo "💾 Backup storage"
+            mkdir -p $BACKUP_FOLDER/storage
+            cp -r $TARGET/storage/* $BACKUP_FOLDER/storage/
 
             # -------------------------------
-            # 3. Pastikan folder target ada
+            # 3. Aktifkan maintenance mode
             # -------------------------------
-            mkdir -p $TARGET
+            echo "🛠️ Aktifkan maintenance mode"
+            php $TARGET/artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
+
+            # -------------------------------
+            # 4. Clone/update repo Laravel
+            # -------------------------------
             cd $TARGET
-
-            # -------------------------------
-            # 4. Clone atau update repo Laravel via HTTPS + GitHub PAT
-            # -------------------------------
             if [ ! -d ".git" ]; then
-              echo "📥 Clone repo Laravel baru"
+              echo "📥 Clone repo Laravel"
               git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
             else
               echo "🔄 Update repo Laravel"
@@ -114,39 +101,27 @@ jobs:
             fi
 
             # -------------------------------
-            # 5. Copy .env jika belum ada
+            # 5. Copy .env production jika belum ada
             # -------------------------------
             if [ ! -f ".env" ]; then
-              if [ -f ".env.example" ]; then
-                cp .env.example .env
-                echo ".env dibuat dari .env.example"
-              else
-                echo "⚠️ .env tidak ditemukan, harap buat manual"
-              fi
+              echo "⚠️ .env production tidak ada. Harap upload manual!"
             fi
 
             # -------------------------------
-            # 6. Generate APP_KEY jika belum ada
+            # 6. Install Composer dependencies production
             # -------------------------------
-            if ! grep -q "APP_KEY=" .env || [ -z "$(grep APP_KEY .env | cut -d '=' -f2)" ]; then
-              echo "🔑 Generate APP_KEY Laravel"
-              php artisan key:generate --ansi
-            fi
+            echo "🔧 Install composer dependencies (production)"
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
             # -------------------------------
-            # 7. Install composer dependencies
+            # 7. Run migrations & optional seed
             # -------------------------------
-            echo "🔧 Install composer dependencies"
-            composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
-
-            # -------------------------------
-            # 8. Jalankan migrate otomatis
-            # -------------------------------
-            echo "🗄️ Jalankan migrate otomatis"
+            echo "🗄️ Jalankan migrate"
             php artisan migrate --force
+            # php artisan db:seed --class=SeederName --force  # opsional
 
             # -------------------------------
-            # 9. Cache Laravel (config, route, view)
+            # 8. Cache Laravel
             # -------------------------------
             echo "⚡ Cache config, route, view"
             php artisan config:cache
@@ -154,11 +129,26 @@ jobs:
             php artisan view:cache
 
             # -------------------------------
-            # 10. Set permission folder penting
+            # 9. Set permission
             # -------------------------------
-            echo "🔒 Set permission folder storage, bootstrap/cache, public"
+            echo "🔒 Set permission storage, bootstrap/cache, public"
             chmod -R 755 storage bootstrap/cache public
+            chmod 644 .env artisan
+
+            # -------------------------------
+            # 10. Hapus file sensitif dari public_html
+            # -------------------------------
+            echo "🗑️ Hapus file sensitif dari public_html"
+            rm -rf .git
+            rm -f composer.json composer.lock artisan phpunit.xml README.md LICENSE
+
+            # -------------------------------
+            # 11. Nonaktifkan maintenance mode
+            # -------------------------------
+            echo "✅ Nonaktifkan maintenance mode"
+            php artisan up || echo "⚠️ Gagal disable maintenance mode"
 
             echo "✅ Deployment selesai!"
-            echo "💾 Backup lama disimpan di $BACKUP_FOLDER"
-            echo "🔑 APP_KEY sudah dicek / dibuat otomatis"
+            echo "💾 Backup database: $DB_BACKUP"
+            echo "💾 Backup storage: $BACKUP_FOLDER/storage"
+            echo "🔒 public_html sudah aman, file sensitif dihapus"
