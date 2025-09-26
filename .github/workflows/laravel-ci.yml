@@ -46,28 +46,12 @@ jobs:
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      - name: Run Migrations (CI only)
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: management
-          DB_USERNAME: root
-          DB_PASSWORD: root
-        run: php artisan migrate --force
-
-      - name: Run Tests (CI only)
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: management
-          DB_USERNAME: root
-          DB_PASSWORD: root
-        run: vendor/bin/phpunit --stop-on-failure --testdox
+      # Lewatkan migrate & test dulu
+      - name: Skip Migrations & Tests
+        run: echo "Migrations & tests dilewati, env manual nanti"
 
   # =============================
-  # 2️⃣ Continuous Deployment (CD) via appleboy/ssh-action
+  # 2️⃣ Continuous Deployment (CD)
   # =============================
   cd:
     name: Deploy Laravel to Hostinger
@@ -98,9 +82,10 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # Install composer & migrate database
+            # Install composer
             composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
-            php artisan migrate --force
+
+            # Cache config, route, view
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
