@@ -27,7 +27,8 @@ jobs:
           --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -91,7 +92,8 @@ jobs:
     needs: ci
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -110,11 +112,11 @@ jobs:
             #!/bin/bash
             set -e
 
-            # 🔹 Pastikan folder project ada
+            # 🔹 1️⃣ Pastikan folder project ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
-            # 🔹 Git pull / clone otomatis
+            # 🔹 2️⃣ Git pull / clone otomatis
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -122,10 +124,14 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # 🔹 Install dependencies Laravel
+            # 🔹 3️⃣ Pakai .env.ci sementara agar Laravel jalan
+            cp .env.ci .env
+            echo "✅ Menggunakan .env.ci untuk deploy sementara"
+
+            # 🔹 4️⃣ Install dependencies Laravel
             composer install --no-dev --optimize-autoloader
 
-            # 🔹 Clear & cache Laravel
+            # 🔹 5️⃣ Clear & cache Laravel
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
@@ -134,10 +140,10 @@ jobs:
             php artisan route:cache
             php artisan view:cache
 
-            # 🔹 Set permission folder penting
+            # 🔹 6️⃣ Set permission folder penting
             chmod -R 775 storage bootstrap/cache
 
-            # 🔹 Restart queue worker jika ada
+            # 🔹 7️⃣ Restart queue worker jika ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
