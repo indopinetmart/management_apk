@@ -1,10 +1,11 @@
-name: Laravel CI/CD - Management Pinetmart Subdomain (Backup + Detailed)
+name: Laravel CI/CD - Management Pinetmart Subdomain (Backup + Final)
 
-# Trigger workflow saat ada push ke branch main
+# Trigger workflow saat ada push ke branch main atau develop
 on:
   push:
     branches:
       - main
+      - develop
 
 jobs:
   # =============================
@@ -14,13 +15,13 @@ jobs:
     name: Laravel CI
     runs-on: ubuntu-latest
 
-    # Menjalankan MySQL sebagai service untuk testing local
     services:
+      # Menjalankan MySQL untuk testing local
       mysql:
         image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: root      # Password root MySQL
-          MYSQL_DATABASE: management     # Database testing
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: management
         ports:
           - 3306:3306
         options: >-
@@ -30,11 +31,11 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1. Checkout repo dari GitHub
+      # 1. Checkout kode repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # 2. Setup PHP versi 8.2 + ekstensi yang dibutuhkan Laravel
+      # 2. Setup PHP versi 8.2 + ekstensi Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -53,40 +54,38 @@ jobs:
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 6. Skip migrate & test di CI (akan dilakukan manual/deploy)
+      # 6. Skip migrate & test di CI (akan dilakukan di CD)
       - name: Skip Migrations & Tests
         run: echo "Migrations & tests dilewati, env manual nanti"
 
   # =============================
-  # 2️⃣ Continuous Deployment (CD) dengan backup
+  # 2️⃣ Continuous Deployment (CD) dengan backup + permission
   # =============================
   cd:
-    name: Deploy Laravel to Hostinger with Backup
+    name: Deploy Laravel to Hostinger with Backup + Permission
     runs-on: ubuntu-latest
-    needs: ci  # Menunggu job CI selesai
+    needs: ci
 
     steps:
-      # 1. Deploy via SSH
-      - name: Deploy via SSH (HTTPS clone + backup)
+      - name: Deploy via SSH (HTTPS clone + backup + key + permissions)
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: ${{ secrets.HOSTINGER_HOST }}      # IP / hostname server
-          username: ${{ secrets.HOSTINGER_USER }}  # User SSH
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}    # Private key SSH
-          port: ${{ secrets.HOSTINGER_PORT }}      # Port SSH
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT }}
           script: |
-            set -e  # Stop jika ada error
-
-            echo "🚀 Mulai deployment Laravel 11 dengan backup..."
+            set -e
+            echo "🚀 Mulai deployment Laravel 11 dengan backup dan key..."
 
             # -------------------------------
-            # 2. Definisi folder target & backup
+            # 1. Definisi folder target & backup
             # -------------------------------
             TARGET=~/domains/management-pinetmart.srf-group.com/public_html
             BACKUP_FOLDER=~/domains/management-pinetmart.srf-group.com/backup_$(date +%Y%m%d_%H%M%S)
 
             # -------------------------------
-            # 3. Backup folder Laravel lama
+            # 2. Backup folder Laravel lama jika ada
             # -------------------------------
             if [ -d "$TARGET" ] && [ "$(ls -A $TARGET)" ]; then
               echo "💾 Backup folder lama ke $BACKUP_FOLDER"
@@ -97,13 +96,13 @@ jobs:
             fi
 
             # -------------------------------
-            # 4. Pastikan folder target ada
+            # 3. Pastikan folder target ada
             # -------------------------------
             mkdir -p $TARGET
             cd $TARGET
 
             # -------------------------------
-            # 5. Clone atau update repo Laravel via HTTPS + GitHub PAT
+            # 4. Clone atau update repo Laravel via HTTPS + GitHub PAT
             # -------------------------------
             if [ ! -d ".git" ]; then
               echo "📥 Clone repo Laravel baru"
@@ -115,7 +114,7 @@ jobs:
             fi
 
             # -------------------------------
-            # 6. Copy .env jika belum ada
+            # 5. Copy .env jika belum ada
             # -------------------------------
             if [ ! -f ".env" ]; then
               if [ -f ".env.example" ]; then
@@ -124,6 +123,14 @@ jobs:
               else
                 echo "⚠️ .env tidak ditemukan, harap buat manual"
               fi
+            fi
+
+            # -------------------------------
+            # 6. Generate APP_KEY jika belum ada
+            # -------------------------------
+            if ! grep -q "APP_KEY=" .env || [ -z "$(grep APP_KEY .env | cut -d '=' -f2)" ]; then
+              echo "🔑 Generate APP_KEY Laravel"
+              php artisan key:generate --ansi
             fi
 
             # -------------------------------
@@ -146,5 +153,13 @@ jobs:
             php artisan route:cache
             php artisan view:cache
 
+            # -------------------------------
+            # 10. Set permission folder penting
+            # -------------------------------
+            echo "🔒 Set permission folder storage, bootstrap/cache, public"
+            chmod -R 755 storage bootstrap/cache public
+            chown -R $USER:$USER storage bootstrap/cache public
+
             echo "✅ Deployment selesai!"
             echo "💾 Backup lama disimpan di $BACKUP_FOLDER"
+            echo "🔑 APP_KEY sudah dicek / dibuat otomatis"
