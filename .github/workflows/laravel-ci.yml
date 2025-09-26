@@ -1,6 +1,6 @@
 name: Laravel CI/CD - management_apk
 
-# 🔹 Workflow jalan saat push ke branch main
+# 🔹 Workflow berjalan otomatis ketika ada push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -28,8 +28,10 @@ jobs:
           --health-retries=5
 
     steps:
+      # 1️⃣ Checkout kode dari GitHub
       - uses: actions/checkout@v4
 
+      # 2️⃣ Setup PHP versi 8.2 dengan ekstensi Laravel butuh
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -37,15 +39,19 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
+      # 3️⃣ Install dependencies PHP
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      # 4️⃣ Copy environment khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
+      # 5️⃣ Generate APP_KEY Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+      # 6️⃣ Jalankan migration di database MySQL CI
       - name: Run Migrations
         env:
           DB_CONNECTION: mysql
@@ -56,6 +62,7 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
+      # 7️⃣ Jalankan PHPUnit test
       - name: Run Tests
         env:
           DB_CONNECTION: mysql
@@ -72,35 +79,35 @@ jobs:
   cd:
     name: Deploy to Hostinger
     runs-on: ubuntu-latest
-    needs: ci # hanya jalan kalau CI sukses
+    needs: ci # hanya jalan kalau CI sukses ✅
 
     steps:
+      # 1️⃣ Checkout repo (biar action punya akses file GitHub)
       - uses: actions/checkout@v4
 
+      # 2️⃣ Deploy via SSH ke Hostinger
       - name: Deploy to Hostinger via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
-          host: 145.223.108.62
-          username: u943606636
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: 65002
+          host: 145.223.108.62                # IP Hostinger kamu
+          username: u943606636                # Username SSH Hostinger
+          key: ${{ secrets.HOSTINGER_SSH_KEY }} # Private key Ed25519 yang kamu buat
+          port: 65002                         # Port SSH Hostinger
           script: |
-            #!/bin/bash
-            set -e
-
-            echo "🚀 Mulai deployment ke Hostinger..."
-
+            # Masuk ke folder project
             cd ~/public_html
 
-            # Tarik update terbaru dari repo
+            # 🔄 Tarik kode terbaru dari GitHub
             if [ ! -d ".git" ]; then
-              git clone git@github.com:indopinetmart/management_apk.git .
+              # Clone pertama kali (pakai HTTPS supaya gak perlu key GitHub)
+              git clone https://github.com/indopinetmart/management_apk.git .
             else
+              # Kalau sudah ada repo, ambil update terbaru
               git fetch origin main
               git reset --hard origin/main
             fi
 
-            # Copy env production jadi .env
+            # 📄 Copy .env.production jadi .env
             if [ -f ".env.production" ]; then
               cp .env.production .env
               echo "✅ .env.production dicopy ke .env"
@@ -108,34 +115,35 @@ jobs:
               echo "⚠️ WARNING: .env.production tidak ditemukan!"
             fi
 
-            # Install dependencies PHP
+            # 📦 Install dependencies PHP (tanpa dev)
             composer install --no-dev --optimize-autoloader
 
-            # Clear & cache config, routes, view
+            # 🔧 Clear cache Laravel
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan cache:clear
 
+            # 🔧 Rebuild cache Laravel
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # Jalankan migration production
+            # 🗄️ Jalankan migration di production
             php artisan migrate --force
 
-            # Build asset front-end (Vite) jika Node.js tersedia
+            # 🎨 Build asset front-end (jika Node.js tersedia di server)
             if command -v npm > /dev/null 2>&1; then
               npm install
               npm run build
             else
-              echo "⚠️ Node.js tidak ada di server, build asset sebaiknya di GitHub Actions"
+              echo "⚠️ Node.js tidak ada di server, build asset sebaiknya dilakukan di GitHub Actions"
             fi
 
-            # Set permission storage & bootstrap/cache
+            # 🔑 Atur permission folder penting
             chmod -R 755 storage bootstrap/cache
 
-            # Restart queue worker jika ada
+            # 🚦 Restart queue worker kalau ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
