@@ -1,6 +1,5 @@
 name: Laravel CI/CD - management_apk
 
-# 🔹 Workflow jalan otomatis saat push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -28,10 +27,8 @@ jobs:
           --health-retries=5
 
     steps:
-      # 🔹 Checkout kode dari repo
       - uses: actions/checkout@v4
 
-      # 🔹 Setup PHP 8.2 dengan ekstensi penting Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -39,19 +36,15 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
-      # 🔹 Install dependencies Laravel
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      # 🔹 Copy environment khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
-      # 🔹 Generate APP_KEY Laravel
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 🔹 Jalankan migration di CI database
       - name: Run Migrations
         env:
           DB_CONNECTION: mysql
@@ -62,7 +55,6 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
-      # 🔹 Jalankan unit test Laravel
       - name: Run Tests
         env:
           DB_CONNECTION: mysql
@@ -82,12 +74,11 @@ jobs:
           node-version: 20
 
       - name: Install NPM Dependencies
-        run: npm install  # pake npm install biar ga error kalau package-lock.json tidak ada
+        run: npm install  # pakai npm install agar tidak error jika package-lock.json belum ada
 
       - name: Build Vite Assets
         run: npm run build
 
-      # 🔹 Archive folder build untuk CD
       - name: Archive build folder
         uses: actions/upload-artifact@v4
         with:
@@ -103,17 +94,14 @@ jobs:
     needs: ci
 
     steps:
-      # 🔹 Checkout kode repo (untuk reference)
       - uses: actions/checkout@v4
 
-      # 🔹 Download artifact hasil build frontend
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: public-build
           path: ./public_build
 
-      # 🔹 Deploy ke server via SSH
       - name: Deploy to Hostinger via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -125,11 +113,9 @@ jobs:
             #!/bin/bash
             set -e
 
-            # 🔹 Pastikan folder management_apk ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
-            # 🔹 Pull kode terbaru / clone jika pertama kali
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -137,30 +123,31 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # 🔹 Copy .env.production ke .env
             if [ -f ".env.production" ]; then
               cp .env.production .env
+              echo "✅ .env.production dicopy ke .env"
+            else
+              echo "⚠️ .env.production tidak ditemukan"
+              exit 1
             fi
 
-            # 🔹 Install dependencies Laravel & clear/cache
             composer install --no-dev --optimize-autoloader
+
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan cache:clear
+
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # 🔹 Set permission folder penting
             chmod -R 775 storage bootstrap/cache
 
-            # 🔹 Restart queue worker jika ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
 
-      # 🔹 Upload folder public_build ke server dengan rsync
       - name: Upload public/build to Hostinger via Rsync
         run: |
           rsync -avz --delete -e "ssh -p 65002 -i ${{ secrets.HOSTINGER_SSH_KEY }}" \
