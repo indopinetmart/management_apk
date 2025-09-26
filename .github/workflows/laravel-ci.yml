@@ -67,7 +67,7 @@ jobs:
         run: vendor/bin/phpunit --stop-on-failure --testdox
 
   # =============================
-  # 2️⃣ Continuous Deployment (CD)
+  # 2️⃣ Continuous Deployment (CD) via appleboy/ssh-action
   # =============================
   cd:
     name: Deploy Laravel to Hostinger
@@ -75,38 +75,31 @@ jobs:
     needs: ci
 
     steps:
-      # -----------------------------
-      # 1️⃣ Setup SSH
-      # -----------------------------
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.HOSTINGER_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.HOSTINGER_PORT }} ${{ secrets.HOSTINGER_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to Hostinger via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USER }}
+          key: ${{ secrets.HOSTINGER_SSH_KEY }}
+          port: ${{ secrets.HOSTINGER_PORT }}
+          script: |
+            set -e
+            echo "🚀 Mulai deployment Laravel 11..."
 
-      # -----------------------------
-      # 2️⃣ Deploy Laravel Code
-      # -----------------------------
-      - name: Deploy Laravel Code
-        run: |
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.HOSTINGER_PORT }} \
-          -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} << 'EOF'
-            cd ~/domains/management-pinetmart.srf-group.com
+            # Pastikan folder project ada
+            mkdir -p ~/public_html/management_apk
+            cd ~/public_html/management_apk
 
-            # Clone repo jika belum ada, atau update branch main
-            if [ ! -d "management_apk" ]; then
-              git clone https://github.com/indopinetmart/management_apk.git management_apk
+            # Clone / update repo
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/indopinetmart/management_apk.git .
             else
-              cd management_apk
               git fetch origin main
               git reset --hard origin/main
             fi
 
-            cd management_apk
-
-            # Composer install & migrate database
-            /usr/local/bin/composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
+            # Install composer & migrate database
+            composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache
@@ -117,13 +110,12 @@ jobs:
             use Illuminate\Http\Request;
             define('LARAVEL_START', microtime(true));
 
-            if (file_exists(\$maintenance = __DIR__.'/../management_apk/storage/framework/maintenance.php')) {
+            if (file_exists(\$maintenance = __DIR__.'/storage/framework/maintenance.php')) {
                 require \$maintenance;
             }
 
-            require __DIR__.'/../management_apk/vendor/autoload.php';
+            require __DIR__.'/vendor/autoload.php';
 
-            (require_once __DIR__.'/../management_apk/bootstrap/app.php')
+            (require_once __DIR__.'/bootstrap/app.php')
                 ->handleRequest(Request::capture());
-            " > ~/domains/management-pinetmart.srf-group.com/public_html/index.php
-          EOF
+            " > ~/public_html/management_apk/index.php
