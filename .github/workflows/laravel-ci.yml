@@ -97,12 +97,10 @@ jobs:
             mkdir -p $LARAVEL_DIR
             cd $LARAVEL_DIR
 
-            # Jika folder kosong, clone repo
             if [ -z "$(ls -A $LARAVEL_DIR)" ]; then
               echo "📥 Clone repo Laravel"
               git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
             else
-              # Jika folder ada tapi bukan git repo, hapus semua isi dan clone
               if [ ! -d ".git" ]; then
                 echo "⚠️ Folder ada tapi bukan repo git, hapus semua dan clone"
                 rm -rf $LARAVEL_DIR/*
@@ -115,12 +113,10 @@ jobs:
             fi
 
             # -------------------------------
-            # 4. Pastikan .env tetap aman
+            # 4. Upload .env dari GitHub Secrets
             # -------------------------------
-            if [ ! -f ".env" ]; then
-              echo "⚠️ .env production tidak ada. Harap upload manual!"
-            fi
-            echo "✅ .env production tetap aman, tidak diubah"
+            echo "📄 Menyimpan .env production dari secrets"
+            echo "${{ secrets.ENV_PRODUCTION }}" > $LARAVEL_DIR/.env
 
             # -------------------------------
             # 5. Aktifkan maintenance mode
@@ -152,7 +148,6 @@ jobs:
             cp $LARAVEL_DIR/public/index.php $WEB_ROOT/index.php
             cp $LARAVEL_DIR/public/.htaccess $WEB_ROOT/.htaccess
 
-            # Update paths di index.php agar menunjuk ke folder Laravel
             sed -i "s|../vendor/autoload.php|../management_apk/vendor/autoload.php|" $WEB_ROOT/index.php
             sed -i "s|../bootstrap/app.php|../management_apk/bootstrap/app.php|" $WEB_ROOT/index.php
 
@@ -161,10 +156,11 @@ jobs:
             # -------------------------------
             echo "🔒 Set permission storage, bootstrap/cache, public_html"
             chmod -R 755 $LARAVEL_DIR/storage $LARAVEL_DIR/bootstrap/cache $WEB_ROOT
-            chmod 644 $LARAVEL_DIR/.env $LARAVEL_DIR/artisan $WEB_ROOT/index.php $WEB_ROOT/.htaccess
+            [ -f "$LARAVEL_DIR/.env" ] && chmod 644 $LARAVEL_DIR/.env
+            chmod 644 $LARAVEL_DIR/artisan $WEB_ROOT/index.php $WEB_ROOT/.htaccess
 
             # -------------------------------
-            # 10. Hapus file sensitif dari Laravel dir (opsional)
+            # 10. Hapus file sensitif (opsional)
             # -------------------------------
             echo "🗑️ Hapus file sensitif dari Laravel folder (opsional)"
             rm -rf $LARAVEL_DIR/.git
