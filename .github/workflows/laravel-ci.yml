@@ -124,10 +124,13 @@ jobs:
             ln -sfn $NEW_RELEASE $APP_DIR/current
 
             # -------------------------------
-            # 7. Update public_html agar load current/
+            # 7. Update public_html agar load current/ + assets
             # -------------------------------
-            ln -sfn $APP_DIR/current/public/index.php $WEB_ROOT/index.php
-            ln -sfn $APP_DIR/current/public/.htaccess $WEB_ROOT/.htaccess
+            rsync -a --delete $APP_DIR/current/public/ $WEB_ROOT/
+
+            # pastikan index.php mengarah ke current/
+            sed -i "s|../vendor/autoload.php|../current/vendor/autoload.php|" $WEB_ROOT/index.php
+            sed -i "s|../bootstrap/app.php|../current/bootstrap/app.php|" $WEB_ROOT/index.php
 
             # -------------------------------
             # 8. Set permission
