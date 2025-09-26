@@ -46,7 +46,7 @@ jobs:
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      - name: Run Migrations
+      - name: Run Migrations (CI only)
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -56,7 +56,7 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
-      - name: Run Tests
+      - name: Run Tests (CI only)
         env:
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
@@ -112,11 +112,11 @@ jobs:
             #!/bin/bash
             set -e
 
-            # 🔹 1️⃣ Pastikan folder project ada
+            # 🔹 Pastikan folder project ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
-            # 🔹 2️⃣ Git pull / clone otomatis
+            # 🔹 Git pull / clone otomatis
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -124,28 +124,35 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # 🔹 3️⃣ Pakai .env.ci sementara agar Laravel jalan
-            cp .env.ci .env
-            echo "✅ Menggunakan .env.ci untuk deploy sementara"
+            # 🔹 Deploy file project saja
+            echo "✅ File project terbaru sudah dipull dari repo"
 
-            # 🔹 4️⃣ Install dependencies Laravel
-            composer install --no-dev --optimize-autoloader
+            # 🔹 Pakai .env.ci sementara jika .env belum ada
+            if [ ! -f ".env" ]; then
+              cp .env.ci .env
+              echo "✅ Menggunakan .env.ci sementara agar Laravel bisa jalan"
+            else
+              echo "ℹ️ .env sudah ada, deploy file project saja"
+            fi
 
-            # 🔹 5️⃣ Clear & cache Laravel
-            php artisan config:clear
-            php artisan route:clear
-            php artisan view:clear
-            php artisan cache:clear
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+            # 🔹 Install dependencies Laravel (tanpa memaksa DB)
+            composer install --no-dev --optimize-autoloader || true
 
-            # 🔹 6️⃣ Set permission folder penting
-            chmod -R 775 storage bootstrap/cache
+            # 🔹 Clear & cache Laravel (skip error DB)
+            php artisan config:clear || true
+            php artisan route:clear || true
+            php artisan view:clear || true
+            php artisan cache:clear || true
+            php artisan config:cache || true
+            php artisan route:cache || true
+            php artisan view:cache || true
 
-            # 🔹 7️⃣ Restart queue worker jika ada
+            # 🔹 Set permission folder penting
+            chmod -R 775 storage bootstrap/cache || true
+
+            # 🔹 Restart queue worker jika ada (skip error DB)
             if php artisan queue:status > /dev/null 2>&1; then
-              php artisan queue:restart
+              php artisan queue:restart || true
             fi
 
       - name: Upload public/build to Hostinger via Rsync
