@@ -71,7 +71,7 @@ jobs:
             echo "🚀 Mulai deployment Laravel (Secure Production + Public Backup)..."
 
             # -------------------------------
-            # 1. Tentukan folder
+            # 1. Tentukan folder target & backup
             # -------------------------------
             WEB_ROOT=~/domains/management-pinetmart.srf-group.com/public_html
             LARAVEL_DIR=~/domains/management-pinetmart.srf-group.com/management_apk
@@ -92,32 +92,41 @@ jobs:
             [ -d "$WEB_ROOT/uploads" ] && cp -r $WEB_ROOT/uploads $BACKUP_FOLDER/public/uploads
 
             # -------------------------------
-            # 3. Aktifkan maintenance mode
-            # -------------------------------
-            echo "🛠️ Aktifkan maintenance mode"
-            php $LARAVEL_DIR/artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
-
-            # -------------------------------
-            # 4. Clone / update repo Laravel
+            # 3. Clone / update repo Laravel dengan aman
             # -------------------------------
             mkdir -p $LARAVEL_DIR
             cd $LARAVEL_DIR
-            if [ ! -d ".git" ]; then
+
+            # Jika folder kosong, clone repo
+            if [ -z "$(ls -A $LARAVEL_DIR)" ]; then
               echo "📥 Clone repo Laravel"
               git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
             else
-              echo "🔄 Update repo Laravel"
-              git fetch origin main
-              git reset --hard origin/main
+              # Jika folder ada tapi bukan git repo, hapus semua isi dan clone
+              if [ ! -d ".git" ]; then
+                echo "⚠️ Folder ada tapi bukan repo git, hapus semua dan clone"
+                rm -rf $LARAVEL_DIR/*
+                git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git .
+              else
+                echo "🔄 Update repo Laravel"
+                git fetch origin main
+                git reset --hard origin/main
+              fi
             fi
 
             # -------------------------------
-            # 5. Pastikan .env production tetap aman
+            # 4. Pastikan .env tetap aman
             # -------------------------------
             if [ ! -f ".env" ]; then
               echo "⚠️ .env production tidak ada. Harap upload manual!"
             fi
             echo "✅ .env production tetap aman, tidak diubah"
+
+            # -------------------------------
+            # 5. Aktifkan maintenance mode
+            # -------------------------------
+            echo "🛠️ Aktifkan maintenance mode"
+            php artisan down || echo "⚠️ Gagal aktifkan maintenance mode"
 
             # -------------------------------
             # 6. Install Composer dependencies production
@@ -137,7 +146,7 @@ jobs:
             php artisan view:cache
 
             # -------------------------------
-            # 8. Duplicate index.php & .htaccess ke public_html
+            # 8. Duplicate index.php & .htaccess ke web root
             # -------------------------------
             echo "📄 Duplicate index.php & .htaccess ke public_html"
             cp $LARAVEL_DIR/public/index.php $WEB_ROOT/index.php
@@ -165,7 +174,7 @@ jobs:
             # 11. Nonaktifkan maintenance mode
             # -------------------------------
             echo "✅ Nonaktifkan maintenance mode"
-            php $LARAVEL_DIR/artisan up || echo "⚠️ Gagal disable maintenance mode"
+            php artisan up || echo "⚠️ Gagal disable maintenance mode"
 
             echo "✅ Deployment selesai!"
             echo "💾 Backup storage Laravel: $BACKUP_FOLDER/storage"
