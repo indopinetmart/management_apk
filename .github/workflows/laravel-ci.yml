@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop   # workflow jalan kalau ada push ke branch main / develop
+      - develop   # Workflow jalan kalau ada push ke branch main / develop
 
 jobs:
   # =============================
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mysql:                      # service MySQL untuk test CI
+      mysql:                      # Service MySQL untuk test CI
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: root
@@ -99,13 +99,12 @@ jobs:
             # 3. Buat release baru
             # -------------------------------
             mkdir -p $NEW_RELEASE
-            git clone https://${GITHUB_PAT}@github.com/indopinetmart/management_apk.git $NEW_RELEASE
+            git clone --branch main https://github.com/indopinetmart/management_apk.git $NEW_RELEASE
 
             # -------------------------------
             # 4. Shared resource (env & storage)
             # -------------------------------
-            echo "📄 Gunakan .env lokal (manual, bukan dari GitHub Secrets)"
-            # NOTE: Karena .env Anda dibuat manual, tidak overwrite di sini
+            echo "📄 Gunakan .env & storage lokal (manual, bukan dari GitHub Secrets)"
             ln -sfn $APP_DIR/.env $NEW_RELEASE/.env
             ln -sfn $APP_DIR/storage $NEW_RELEASE/storage
 
@@ -113,7 +112,7 @@ jobs:
             # 5. Install dependencies + migrate + cache
             # -------------------------------
             cd $NEW_RELEASE
-            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --ansi
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache
@@ -127,15 +126,14 @@ jobs:
             # -------------------------------
             # 7. Update public_html agar load current/
             # -------------------------------
-            cp $NEW_RELEASE/public/index.php $WEB_ROOT/index.php
-            cp $NEW_RELEASE/public/.htaccess $WEB_ROOT/.htaccess
-            sed -i "s|../vendor/autoload.php|../current/vendor/autoload.php|" $WEB_ROOT/index.php
-            sed -i "s|../bootstrap/app.php|../current/bootstrap/app.php|" $WEB_ROOT/index.php
+            ln -sfn $APP_DIR/current/public/index.php $WEB_ROOT/index.php
+            ln -sfn $APP_DIR/current/public/.htaccess $WEB_ROOT/.htaccess
 
             # -------------------------------
             # 8. Set permission
             # -------------------------------
-            chmod -R 755 $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache $WEB_ROOT
+            chmod -R ug+rwx $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache
+            chmod -R 755 $WEB_ROOT
             chmod 644 $APP_DIR/.env $WEB_ROOT/index.php $WEB_ROOT/.htaccess
 
             # -------------------------------
@@ -149,7 +147,7 @@ jobs:
             # -------------------------------
             echo "🧹 Hapus release lama, simpan 5 terakhir"
             cd $RELEASES_DIR
-            ls -1t | tail -n +3 | xargs rm -rf || true
+            ls -1t | tail -n +6 | xargs rm -rf || true
 
             echo "✅ Deployment selesai tanpa downtime!"
             echo "📂 Release aktif: $RELEASE_NAME"
