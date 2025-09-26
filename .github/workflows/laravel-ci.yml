@@ -1,6 +1,6 @@
 name: Laravel CI/CD - management_apk
 
-# 🔹 Workflow jalan otomatis ketika ada push ke branch main
+# 🔹 Workflow jalan otomatis saat push ke branch main
 on:
   push:
     branches: [ "main" ]
@@ -82,7 +82,7 @@ jobs:
           node-version: 20
 
       - name: Install NPM Dependencies
-        run: npm ci
+        run: npm install  # pake npm install biar ga error kalau package-lock.json tidak ada
 
       - name: Build Vite Assets
         run: npm run build
