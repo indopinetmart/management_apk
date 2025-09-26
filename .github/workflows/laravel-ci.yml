@@ -1,16 +1,16 @@
-name: Laravel CI/CD - management_apk
+name: Laravel CI/CD - Management Pinetmart Subdomain
 
-# 🔹 Workflow jalan saat push ke branch main
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   # =============================
   # 1️⃣ Continuous Integration (CI)
   # =============================
   ci:
-    name: Laravel CI + Build Frontend
+    name: Laravel CI
     runs-on: ubuntu-latest
 
     services:
@@ -28,31 +28,24 @@ jobs:
           --health-retries=5
 
     steps:
-      # 🔹 Ambil kode dari repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # 🔹 Setup PHP untuk Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
-          coverage: none
 
-      # 🔹 Install dependency Laravel
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      # 🔹 Copy env khusus CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
-      # 🔹 Generate APP_KEY
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 🔹 Migrasi database untuk CI
       - name: Run Migrations (CI only)
         env:
           DB_CONNECTION: mysql
@@ -63,7 +56,6 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
-      # 🔹 Jalankan unit test
       - name: Run Tests (CI only)
         env:
           DB_CONNECTION: mysql
@@ -74,115 +66,64 @@ jobs:
           DB_PASSWORD: root
         run: vendor/bin/phpunit --stop-on-failure --testdox
 
-      # 🔹 Setup Node.js untuk build frontend
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-
-      # 🔹 Install dependency frontend
-      - name: Install NPM Dependencies
-        run: npm install
-
-      # 🔹 Build asset dengan Vite
-      - name: Build Vite Assets
-        run: npm run build
-
-      # 🔹 Simpan hasil build sebagai artifact (akan dipakai di CD)
-      - name: Archive build folder
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-build
-          path: public/build
-
   # =============================
   # 2️⃣ Continuous Deployment (CD)
   # =============================
   cd:
-    name: Deploy to Hostinger via SSH + Rsync
+    name: Deploy Laravel to Hostinger
     runs-on: ubuntu-latest
-    needs: ci # hanya jalan kalau CI sukses
+    needs: ci
 
     steps:
-      # 🔹 Ambil kode repo
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      # 🔹 Ambil hasil build dari CI
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: public-build
-          path: ./public_build
-
-      # 🔹 Test SSH connection biar gampang debug key
-      - name: Test SSH Connection
+      # -----------------------------
+      # 1️⃣ Setup SSH
+      # -----------------------------
+      - name: Setup SSH
         run: |
-          ssh -o StrictHostKeyChecking=no -p 65002 u943606636@145.223.108.62 "echo '✅ SSH connection success'"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOSTINGER_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.HOSTINGER_PORT }} ${{ secrets.HOSTINGER_HOST }} >> ~/.ssh/known_hosts
 
-      # 🔹 Deploy file project ke Hostinger
-      - name: Deploy to Hostinger via SSH
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: 145.223.108.62
-          username: u943606636
-          key: ${{ secrets.HOSTINGER_SSH_KEY }}
-          port: 65002
-          script: |
-            #!/bin/bash
-            set -e
+      # -----------------------------
+      # 2️⃣ Deploy Laravel Code
+      # -----------------------------
+      - name: Deploy Laravel Code
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.HOSTINGER_PORT }} \
+          -o StrictHostKeyChecking=no ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} << 'EOF'
+            cd ~/domains/management-pinetmart.srf-group.com
 
-            echo "🚀 Mulai deployment ke Hostinger..."
-
-            # Pastikan folder project ada
-            mkdir -p ~/public_html/management_apk
-            cd ~/public_html/management_apk
-
-            # Git clone / pull
-            if [ ! -d ".git" ]; then
-              git clone https://github.com/indopinetmart/management_apk.git .
+            # Clone repo jika belum ada, atau update branch main
+            if [ ! -d "management_apk" ]; then
+              git clone https://github.com/indopinetmart/management_apk.git management_apk
             else
+              cd management_apk
               git fetch origin main
               git reset --hard origin/main
             fi
 
-            echo "✅ File project terbaru sudah dipull dari repo"
+            cd management_apk
 
-            # Copy env kalau belum ada
-            if [ ! -f ".env" ]; then
-              cp .env.ci .env
-              echo "✅ Menggunakan .env.ci sementara agar Laravel bisa jalan"
-            else
-              echo "ℹ️ .env sudah ada, tidak diganti"
-            fi
+            # Composer install & migrate database
+            /usr/local/bin/composer install --no-interaction --prefer-dist --optimize-autoloader || composer install
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
 
-            # Install dependency Laravel (skip error kalau DB belum siap)
-            composer install --no-dev --optimize-autoloader || true
+            # Update index.php Laravel 11
+            echo "<?php
+            use Illuminate\Http\Request;
+            define('LARAVEL_START', microtime(true));
 
-            # Clear & cache config Laravel
-            php artisan config:clear || true
-            php artisan route:clear || true
-            php artisan view:clear || true
-            php artisan cache:clear || true
-            php artisan config:cache || true
-            php artisan route:cache || true
-            php artisan view:cache || true
+            if (file_exists(\$maintenance = __DIR__.'/../management_apk/storage/framework/maintenance.php')) {
+                require \$maintenance;
+            }
 
-            # Set permission storage & cache
-            chmod -R 775 storage bootstrap/cache || true
+            require __DIR__.'/../management_apk/vendor/autoload.php';
 
-            # Restart queue worker jika ada
-            if php artisan queue:status > /dev/null 2>&1; then
-              php artisan queue:restart || true
-            fi
-
-            echo "✅ Deployment backend selesai"
-
-      # 🔹 Upload hasil build frontend via rsync
-      - name: Upload public/build to Hostinger via Rsync
-        run: |
-          echo "${{ secrets.HOSTINGER_SSH_KEY }}" > private_key.pem
-          chmod 600 private_key.pem
-
-          rsync -avz --delete -e "ssh -p 65002 -i private_key.pem -o StrictHostKeyChecking=no" \
-          ./public_build/ u943606636@145.223.108.62:~/public_html/management_apk/public/build
+            (require_once __DIR__.'/../management_apk/bootstrap/app.php')
+                ->handleRequest(Request::capture());
+            " > ~/domains/management-pinetmart.srf-group.com/public_html/index.php
+          EOF
