@@ -117,7 +117,7 @@ Route::middleware(['check.session'])->group(function () {
     //ROUTE ROLE MENU
     Route::post('/setting/permission/store', [TambahMenuController::class, 'permissions_store'])->name('setting.permission_store');
     Route::get('/setting/permissionsEditAjax/{id}', [TambahMenuController::class, 'permissionsEditAjax'])->name('setting.permissionsedit.ajax');
-    Route::put('/setting/permissionsUpdateAjax/{id}', [TambahMenuController::class, 'permissionsUpdateAjax'])->name('setting.menuupdate.ajax');
+    Route::put('/setting/permissionsUpdateAjax/{id}', [TambahMenuController::class, 'permissionsUpdateAjax'])->name('setting.permissionupdate.ajax');
     Route::get('/setting/permissionsfetchdelete/{id}', [TambahMenuController::class, 'fetchDeletePermissions'])->name('setting.Permissionsfetchdelete.ajax');
     Route::delete('/setting/hapusPermissions/{permissions}', [TambahMenuController::class, 'hapusPermissions'])->name('setting.permissionsdelete.ajax');
 });
