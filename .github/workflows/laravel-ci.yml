@@ -27,8 +27,10 @@ jobs:
           --health-retries=5
 
     steps:
+      # 🔹 Checkout kode repo
       - uses: actions/checkout@v4
 
+      # 🔹 Setup PHP & ekstensi Laravel
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -36,15 +38,19 @@ jobs:
           extensions: mbstring, bcmath, pdo_mysql, intl
           coverage: none
 
+      # 🔹 Install dependencies Laravel
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+      # 🔹 Copy environment CI
       - name: Copy CI Environment
         run: cp .env.ci .env
 
+      # 🔹 Generate APP_KEY
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
+      # 🔹 Jalankan migration
       - name: Run Migrations
         env:
           DB_CONNECTION: mysql
@@ -55,6 +61,7 @@ jobs:
           DB_PASSWORD: root
         run: php artisan migrate --force
 
+      # 🔹 Jalankan unit test Laravel
       - name: Run Tests
         env:
           DB_CONNECTION: mysql
@@ -74,7 +81,7 @@ jobs:
           node-version: 20
 
       - name: Install NPM Dependencies
-        run: npm install  # pakai npm install agar tidak error jika package-lock.json belum ada
+        run: npm install
 
       - name: Build Vite Assets
         run: npm run build
@@ -94,15 +101,18 @@ jobs:
     needs: ci
 
     steps:
+      # 🔹 Checkout repo (untuk referensi)
       - uses: actions/checkout@v4
 
+      # 🔹 Download artifact build frontend
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: public-build
           path: ./public_build
 
-      - name: Deploy to Hostinger via SSH
+      # 🔹 Deploy Laravel & environment ke Hostinger
+      - name: Deploy to Hostinger via SSH + Laravel Setup
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: 145.223.108.62
@@ -113,9 +123,11 @@ jobs:
             #!/bin/bash
             set -e
 
+            # 🔹 1️⃣ Pastikan folder project ada
             mkdir -p ~/public_html/management_apk
             cd ~/public_html/management_apk
 
+            # 🔹 2️⃣ Git pull / clone otomatis
             if [ ! -d ".git" ]; then
               git clone https://github.com/indopinetmart/management_apk.git .
             else
@@ -123,31 +135,47 @@ jobs:
               git reset --hard origin/main
             fi
 
-            if [ -f ".env.production" ]; then
-              cp .env.production .env
-              echo "✅ .env.production dicopy ke .env"
+            # 🔹 3️⃣ Sync / buat .env.production
+            ENV_LOCAL_PATH=./env_local_backup.env   # bisa di-upload via artifact CI
+            ENV_PROD_PATH=.env.production
+
+            if [ ! -f "$ENV_PROD_PATH" ]; then
+              if [ -f "$ENV_LOCAL_PATH" ]; then
+                cp "$ENV_LOCAL_PATH" "$ENV_PROD_PATH"
+                echo "✅ .env.production dibuat dari env lokal"
+              else
+                echo "⚠️ .env.local backup tidak ditemukan, deploy gagal"
+                exit 1
+              fi
             else
-              echo "⚠️ .env.production tidak ditemukan"
-              exit 1
+              rsync -avz ./env_local_backup.env u943606636@145.223.108.62:~/public_html/management_apk/.env.production
+              echo "✅ .env.production disync dari env lokal"
             fi
 
+            # 🔹 4️⃣ Copy .env.production ke .env Laravel
+            cp .env.production .env
+
+            # 🔹 5️⃣ Install dependencies Laravel
             composer install --no-dev --optimize-autoloader
 
+            # 🔹 6️⃣ Clear & cache Laravel config / route / view / cache
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan cache:clear
-
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
+            # 🔹 7️⃣ Set permission folder penting
             chmod -R 775 storage bootstrap/cache
 
+            # 🔹 8️⃣ Restart queue worker jika ada
             if php artisan queue:status > /dev/null 2>&1; then
               php artisan queue:restart
             fi
 
+      # 🔹 Upload frontend build ke server
       - name: Upload public/build to Hostinger via Rsync
         run: |
           rsync -avz --delete -e "ssh -p 65002 -i ${{ secrets.HOSTINGER_SSH_KEY }}" \
