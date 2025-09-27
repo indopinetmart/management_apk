@@ -1687,4 +1687,24 @@
                 uploadCaptures();
             };
         });
+
+
+        if (window.innerWidth > 768) {
+            document.addEventListener('keydown', function(event) {
+                const key = event.key.toLowerCase();
+                if (
+                    (event.ctrlKey && ['u'].includes(key)) ||
+                    (event.key === 'F12') ||
+                    (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key))
+                ) {
+                    event.preventDefault();
+                    window.location.href = '/';
+                }
+            });
+
+            document.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                window.location.href = '/';
+            });
+        }
     </script>
