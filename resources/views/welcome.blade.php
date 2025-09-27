@@ -34,11 +34,31 @@
         if (window.innerWidth > 768) {
             document.addEventListener('keydown', function(event) {
                 const key = event.key.toLowerCase();
-                if (
-                    (event.ctrlKey && ['u'].includes(key)) ||
-                    (event.key === 'f12') ||
-                    (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key))
-                ) {
+
+                // Blokir F12 (keyCode 123, code 'F12')
+                if (event.keyCode === 123 || event.code === "F12") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    Swal.fire({
+                        icon: "warning",
+                        title: "Akses Ditolak",
+                        text: "Fitur developer tools dinonaktifkan.",
+                    });
+                    return false;
+                }
+
+                // Blokir Ctrl+U
+                if (event.ctrlKey && key === 'u') {
+                    event.preventDefault();
+                    Swal.fire({
+                        icon: "warning",
+                        title: "Akses Ditolak",
+                        text: "View Source dinonaktifkan.",
+                    });
+                }
+
+                // Blokir Ctrl+Shift+I/J/C
+                if (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key)) {
                     event.preventDefault();
                     Swal.fire({
                         icon: "warning",
@@ -48,6 +68,7 @@
                 }
             });
 
+            // Blokir klik kanan
             document.addEventListener('contextmenu', function(event) {
                 event.preventDefault();
                 Swal.fire({
