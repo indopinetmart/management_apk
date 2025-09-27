@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -29,25 +30,34 @@
 
 
     <script>
+        // === BLOKIR INSPECT ELEMENT ===
         if (window.innerWidth > 768) {
             document.addEventListener('keydown', function(event) {
                 const key = event.key.toLowerCase();
                 if (
                     (event.ctrlKey && ['u'].includes(key)) ||
-                    (event.key === 'F12') ||
+                    (event.key === 'f12') ||
                     (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key))
                 ) {
                     event.preventDefault();
-                    window.location.href = '/';
+                    Swal.fire({
+                        icon: "warning",
+                        title: "Akses Ditolak",
+                        text: "Fitur developer tools dinonaktifkan.",
+                    });
                 }
             });
 
             document.addEventListener('contextmenu', function(event) {
                 event.preventDefault();
-                window.location.href = '/';
+                Swal.fire({
+                    icon: "warning",
+                    title: "Akses Ditolak",
+                    text: "Klik kanan dinonaktifkan.",
+                });
             });
         }
     </script>
 </body>
-</html>
 
+</html>
