@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop   # Workflow jalan kalau ada push ke branch main / develop
+      - develop
 
 jobs:
   # =============================
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mysql:                      # Service MySQL untuk test CI
+      mysql:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: root
@@ -29,32 +29,27 @@ jobs:
           --health-retries=5
 
     steps:
-      # 1. Ambil kode dari repo
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # 2. Setup PHP sesuai versi project
       - name: Setup PHP 8.2
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, bcmath, pdo_mysql, intl
 
-      # 3. Install dependency composer
       - name: Install Composer Dependencies
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      # 4. Pakai env untuk CI (opsional)
       - name: Copy CI Environment
         run: cp .env.ci .env || echo "⚠️ CI env file tidak ada, dilewati"
 
-      # 5. Generate app key biar bisa jalan
       - name: Generate App Key
         run: php artisan key:generate --ansi
 
-      # 6. (Opsional) jalankan migration + test
       - name: Skip Migrations & Tests
         run: echo "✅ CI jalan, tapi migrations & tests dilewati"
+
 
   # =============================
   # 2️⃣ Continuous Deployment (CD)
@@ -62,10 +57,9 @@ jobs:
   cd:
     name: Deploy Laravel Zero Downtime (Hostinger)
     runs-on: ubuntu-latest
-    needs: ci   # CD hanya jalan kalau CI sukses
+    needs: ci
 
     steps:
-      # 1. Deploy via SSH ke Hostinger
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -78,87 +72,153 @@ jobs:
             echo "🚀 Zero Downtime Deploy Laravel..."
 
             # -------------------------------
-            # 1. Tentukan folder utama
+            # 1. Konfigurasi path & nama release
             # -------------------------------
             APP_DIR=~/domains/management-pinetmart.srf-group.com
             WEB_ROOT=$APP_DIR/public_html
             RELEASES_DIR=$APP_DIR/releases
-            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)   # nama release pakai timestamp
+            RELEASE_NAME=$(date +%Y%m%d_%H%M%S)
             NEW_RELEASE=$RELEASES_DIR/$RELEASE_NAME
             BACKUP_FOLDER=$APP_DIR/backup_$RELEASE_NAME
+
+            # folders upload yang harus disimpan (shared)
+            UPLOAD_FOLDERS="ktp profile selfie verifikasi"
 
             # -------------------------------
             # 2. Backup sebelum deploy
             # -------------------------------
             echo "💾 Backup storage & public_html"
-            mkdir -p $BACKUP_FOLDER
-            cp -r $APP_DIR/storage $BACKUP_FOLDER/storage || echo "⚠️ Storage kosong"
-            cp -r $WEB_ROOT $BACKUP_FOLDER/public || echo "⚠️ Public kosong"
+            mkdir -p "$BACKUP_FOLDER"
+            cp -r "$APP_DIR/storage" "$BACKUP_FOLDER/storage" || echo "⚠️ Storage kosong"
+            cp -r "$WEB_ROOT" "$BACKUP_FOLDER/public" || echo "⚠️ Public kosong"
 
             # -------------------------------
-            # 3. Buat release baru
+            # 3. Siapkan shared upload folder (jika belum ada)
+            #    dan migrasi file upload yang saat ini ada di public_html
+            #    ke shared agar tidak hilang.
             # -------------------------------
-            mkdir -p $NEW_RELEASE
-            git clone --branch main https://github.com/indopinetmart/management_apk.git $NEW_RELEASE
+            echo "📁 Menyiapkan folder shared untuk uploads"
+            mkdir -p "$APP_DIR/shared/uploads"
+            for f in $UPLOAD_FOLDERS; do
+              mkdir -p "$APP_DIR/shared/uploads/$f"
+            done
+
+            echo "📦 Migrasi file upload yang masih ada di $WEB_ROOT ke folder shared (jika ada)"
+            for f in $UPLOAD_FOLDERS; do
+              SRC="$WEB_ROOT/assets/images/$f"
+              DST="$APP_DIR/shared/uploads/$f"
+              if [ -d "$SRC" ] && [ ! -L "$SRC" ]; then
+                echo "  - Menyalin isi $SRC -> $DST"
+                rsync -a --ignore-existing "$SRC/" "$DST/" || true
+              fi
+            done
+
+            # pastikan permission di shared uploads agar webserver bisa menulis
+            chmod -R ug+rwX "$APP_DIR/shared/uploads" || true
 
             # -------------------------------
-            # 4. Shared resource (env & storage)
+            # 4. Buat release baru (git clone)
             # -------------------------------
-            echo "📄 Gunakan .env & storage lokal (manual, bukan dari GitHub Secrets)"
-            ln -sfn $APP_DIR/.env $NEW_RELEASE/.env
-            ln -sfn $APP_DIR/storage $NEW_RELEASE/storage
+            echo "📥 Clone repository ke release baru: $NEW_RELEASE"
+            mkdir -p "$NEW_RELEASE"
+            git clone --branch main https://github.com/indopinetmart/management_apk.git "$NEW_RELEASE"
 
             # -------------------------------
-            # 5. Install dependencies + migrate + cache
+            # 5. Shared resource (env & storage)
             # -------------------------------
-            cd $NEW_RELEASE
+            echo "📄 Gunakan .env & storage lokal (shared)"
+            ln -sfn "$APP_DIR/.env" "$NEW_RELEASE/.env"
+            ln -sfn "$APP_DIR/storage" "$NEW_RELEASE/storage"
+
+            # -------------------------------
+            # 6. Buat symlink folder uploads di dalam release ke shared
+            #    (ganti folder repo dengan symlink ke shared uploads)
+            # -------------------------------
+            echo "🔗 Membuat symlink uploads di dalam release -> shared/uploads"
+            mkdir -p "$NEW_RELEASE/public/assets/images"
+            for f in $UPLOAD_FOLDERS; do
+              # hapus folder repo (jika ada), lalu link ke shared
+              if [ -e "$NEW_RELEASE/public/assets/images/$f" ] || [ -L "$NEW_RELEASE/public/assets/images/$f" ]; then
+                rm -rf "$NEW_RELEASE/public/assets/images/$f"
+              fi
+              ln -sfn "$APP_DIR/shared/uploads/$f" "$NEW_RELEASE/public/assets/images/$f"
+            done
+
+            # -------------------------------
+            # 7. Install dependencies + migrate + cache
+            # -------------------------------
+            echo "📦 Install composer, migrate, cache"
+            cd "$NEW_RELEASE"
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --ansi
             php artisan migrate --force
+            # buat storage:link juga (aman untuk penggunaan disk 'public' jika dipakai)
+            php artisan storage:link || true
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
             # -------------------------------
-            # 6. Update symlink "current" ke release baru
+            # 8. Update symlink 'current' ke release baru
             # -------------------------------
-            ln -sfn $NEW_RELEASE $APP_DIR/current
+            echo "🔁 Update symlink current -> $NEW_RELEASE"
+            ln -sfn "$NEW_RELEASE" "$APP_DIR/current"
 
             # -------------------------------
-            # 7. Update public_html agar load current/ + assets
+            # 9. Sync (rsync) public content ke webroot
+            #    (rsync akan menyalin symlink yang sudah kita buat)
             # -------------------------------
-            rsync -a --delete $APP_DIR/current/public/ $WEB_ROOT/
-
-            # pastikan index.php mengarah ke current/
-            sed -i "s|../vendor/autoload.php|../current/vendor/autoload.php|" $WEB_ROOT/index.php
-            sed -i "s|../bootstrap/app.php|../current/bootstrap/app.php|" $WEB_ROOT/index.php
+            echo "⬆️ Rsync current/public -> $WEB_ROOT (dengan delete untuk membersihkan file lama)"
+            rsync -a --delete "$APP_DIR/current/public/" "$WEB_ROOT/"
 
             # -------------------------------
-            # 8. Set permission
+            # 10. Pastikan index.php menunjuk ke current (jika diperlukan)
             # -------------------------------
-            chmod -R ug+rwx $NEW_RELEASE/storage $NEW_RELEASE/bootstrap/cache
-            chmod -R 755 $WEB_ROOT
-            chmod 644 $APP_DIR/.env $WEB_ROOT/index.php $WEB_ROOT/.htaccess
+            echo "🔧 Memastikan index.php menunjuk ke current/"
+            sed -i "s|../vendor/autoload.php|../current/vendor/autoload.php|" "$WEB_ROOT/index.php" || true
+            sed -i "s|../bootstrap/app.php|../current/bootstrap/app.php|" "$WEB_ROOT/index.php" || true
 
             # -------------------------------
-            # 9. Cleanup file sensitif
+            # 11. Supaya aman: pastikan symlink di webroot mengarah ke shared
+            #     (jika rsync mengganti symlink, kita set ulang)
             # -------------------------------
-            rm -rf $NEW_RELEASE/.git
-            rm -f $NEW_RELEASE/phpunit.xml $NEW_RELEASE/README.md $NEW_RELEASE/LICENSE
+            echo "🔁 Menegaskan ulang symlink uploads di webroot -> shared/uploads"
+            for f in $UPLOAD_FOLDERS; do
+              TARGET="$APP_DIR/shared/uploads/$f"
+              DEST="$WEB_ROOT/assets/images/$f"
+              # hapus jika ada (folder biasa atau symlink), lalu buat symlink baru
+              if [ -e "$DEST" ] || [ -L "$DEST" ]; then
+                rm -rf "$DEST"
+              fi
+              ln -sfn "$TARGET" "$DEST"
+            done
 
             # -------------------------------
-            # 🔟 Cleanup release lama (keep 5 terakhir)
+            # 12. Set permission
             # -------------------------------
-            echo "🧹 Hapus release lama, simpan 5 terakhir"
-            cd $RELEASES_DIR
+            echo "🔐 Set permission untuk storage, uploads, dan cache"
+            chmod -R ug+rwx "$APP_DIR/shared/uploads" "$NEW_RELEASE/storage" "$NEW_RELEASE/bootstrap/cache" || true
+            chmod -R 755 "$WEB_ROOT" || true
+            chmod 644 "$APP_DIR/.env" "$WEB_ROOT/index.php" "$WEB_ROOT/.htaccess" || true
+
+            # -------------------------------
+            # 13. Cleanup file sensitif dari release
+            # -------------------------------
+            echo "🧹 Cleanup file sensitif di release"
+            rm -rf "$NEW_RELEASE/.git"
+            rm -f "$NEW_RELEASE/phpunit.xml" "$NEW_RELEASE/README.md" "$NEW_RELEASE/LICENSE" || true
+
+            # -------------------------------
+            # 14. Cleanup release lama (keep 5 terakhir)
+            # -------------------------------
+            echo "🧾 Hapus release lama, simpan 5 terakhir"
+            cd "$RELEASES_DIR"
             ls -1t | tail -n +6 | xargs rm -rf || true
 
-
             # -------------------------------
-            # 11. Cleanup backup lama (keep 3 hari terakhir)
+            # 15. Cleanup backup lama (keep 3 hari terakhir)
             # -------------------------------
             echo "🗑️  Hapus backup lebih dari 3 hari"
-            find $APP_DIR -maxdepth 1 -type d -name "backup_*" -mtime +3 -exec rm -rf {} \;
-
+            find "$APP_DIR" -maxdepth 1 -type d -name "backup_*" -mtime +3 -exec rm -rf {} \;
 
             echo "✅ Deployment selesai tanpa downtime!"
             echo "📂 Release aktif: $RELEASE_NAME"
