@@ -50,6 +50,11 @@ return [
         'base_url' => env('DATAWILAYAH_BASE_URL', 'https://api.datawilayah.com/api'),
     ],
 
+    'product' => [
+        'base_url' => env('PRODUCT_SERVICE_API'),
+        'api_key'  => env('PRODUCT_SERVICE_KEY'),
+    ],
+
 
 
 ];
